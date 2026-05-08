@@ -58,7 +58,7 @@ export default function CreateScreen() {
               category: parsed.category,
               priority: parsed.priority,
             },
-            advice: 'Rappel analysé localement. Lance Ollama pour les conseils intelligents.',
+            advice: 'Rappel analysé. Vérifie les détails et confirme.',
             suggestions: [],
             questions: [],
             nextStep: null,

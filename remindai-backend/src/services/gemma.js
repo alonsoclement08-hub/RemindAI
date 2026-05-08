@@ -57,40 +57,51 @@ Guide par type de rappel:
 
 Maximum 2 suggestions et 2 optimisations. Questions seulement si l'info manquante est vraiment utile.`;
 
-const CHAT_PROMPT = (message) => `Tu es RemindAI, un assistant intelligent de rappels. Réponds toujours en français.
+const CHAT_PROMPT = (message) => `Tu es RemindAI, un assistant intelligent de rappels. Réponds TOUJOURS en français.
 
 L'utilisateur dit: "${message}"
 
-Retourne UNIQUEMENT ce JSON valide (sans markdown):
+ÉTAPE 1 — Nettoie le titre. Enlève ces formulations si présentes:
+"créer un rappel pour me rappeler de/d'", "créer un rappel pour", "rappelle-moi de/d'",
+"n'oublie pas de/d'", "pense à", "il faut que je". Garde uniquement l'action + l'objet.
+Exemple: "créer un rappel pour me rappeler d'acheter des croquettes" → "Acheter des croquettes"
+
+ÉTAPE 2 — Extrais les infos. scheduledAt = null si aucune heure/date n'est explicitement mentionnée.
+
+ÉTAPE 3 — Génère un conseil SPÉCIFIQUE à l'action (pas générique). Exemple pour "acheter des croquettes":
+"Les croquettes premium sont souvent moins chères en grande surface le mardi. Vérifie les dates de péremption !"
+
+ÉTAPE 4 — Pose 2 à 3 questions IMPORTANTES selon la catégorie + les infos manquantes.
+
+Retourne UNIQUEMENT ce JSON valide (sans markdown, sans explication):
 {
   "reminder": {
-    "title": "action principale sans date/heure/personne",
+    "title": "titre nettoyé, première lettre majuscule",
     "scheduledAt": null,
     "reminderType": "call|shopping|study|appointment|medication|habit|task",
     "category": "work|personal|health|errand|habit",
     "priority": 2,
-    "entities": {
-      "person": null,
-      "frequency": null,
-      "details": null,
-      "notifyBefore": null
-    }
+    "entities": { "person": null, "frequency": null, "details": null, "notifyBefore": null }
   },
-  "advice": "conseil utile et naturel (1-2 phrases, tutoie l'utilisateur)",
-  "suggestions": ["suggestion courte 1", "suggestion courte 2"],
-  "questions": ["question de clarification si vraiment utile"],
-  "nextStep": "prochaine étape en 1 phrase courte"
+  "advice": "conseil utile et spécifique (pas générique), 1-2 phrases, tutoie l'utilisateur",
+  "suggestions": ["suggestion concrète 1", "suggestion concrète 2"],
+  "questions": ["question 1 (heure si manquante)", "question 2", "question 3 optionnelle"],
+  "missingInfo": true,
+  "missingFields": ["time"],
+  "nextStep": "ce qu'on fait ensuite en 1 phrase"
 }
 
-Règles par type:
-- call: propose meilleurs créneaux, SMS si court
-- shopping: géolocalisation, regrouper les achats similaires
-- study: plan Pomodoro (25min/5min), étaler sur plusieurs jours
-- appointment: propose 3 notifications (J-1, -1h, -15min)
-- medication: rappel quotidien à heure fixe, précautions
-- habit: créneau fixe selon les habitudes
+Questions OBLIGATOIRES si l'heure n'est pas précisée:
+- shopping → "À quelle heure veux-tu ce rappel ?", "Quel budget environ ?"
+- call → "À quelle heure veux-tu appeler ?", "Appel ou SMS ?"
+- study → "Tu as combien de temps pour réviser ?", "Tu révises mieux le matin ou le soir ?"
+- appointment → "À quelle heure est le rendez-vous ?"
+- medication → "À quelle heure chaque matin/soir ?"
+- habit → "À quelle heure quotidiennement ?"
+- task/default → "À quelle heure veux-tu ce rappel ?"
 
-Max 2 suggestions. Questions seulement si vraiment nécessaire.`;
+missingInfo = true si scheduledAt est null. missingFields = ["time"] si heure manquante.
+missingInfo = false seulement si heure ET date sont clairement précisées dans le message.`;
 
 const SUGGEST_PROMPT = (context, limit) => `Suggère ${limit} rappels pertinents basés sur les habitudes de l'utilisateur.
 
@@ -237,9 +248,16 @@ const gemmaService = {
     const raw = await callGemma(CHAT_PROMPT(message));
     const result = extractJSON(raw);
 
-    // Apply deterministic time resolution to the nested reminder object
-    const resolvedAt = resolveScheduledAt(message);
-    if (resolvedAt && result.reminder) result.reminder.scheduledAt = resolvedAt;
+    // Deterministic parser always wins over AI for scheduledAt
+    // null = no explicit time found in text → keep missingInfo: true
+    if (result.reminder) {
+      result.reminder.scheduledAt = resolveScheduledAt(message);
+    }
+    if (result.reminder?.scheduledAt === null) {
+      result.missingInfo = true;
+      if (!result.missingFields) result.missingFields = [];
+      if (!result.missingFields.includes('time')) result.missingFields.push('time');
+    }
 
     await cacheSet(key, result);
     return result;

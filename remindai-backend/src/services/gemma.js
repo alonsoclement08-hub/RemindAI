@@ -1,14 +1,9 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const axios = require("axios");
 const redis = require("./redis");
 
 const CACHE_TTL = 3600;
-const MODEL = process.env.GEMMA_MODEL || "gemma-3-27b-it";
-
-let _genAI;
-function getClient() {
-  if (!_genAI) _genAI = new GoogleGenerativeAI(process.env.GEMMA_API_KEY);
-  return _genAI;
-}
+const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
+const MODEL = process.env.OLLAMA_MODEL || "gemma3";
 
 // ─── Prompts ──────────────────────────────────────────────────────────────────
 
@@ -93,19 +88,15 @@ async function cacheSet(key, value) {
   } catch {}
 }
 
-// ─── Gemma API call ───────────────────────────────────────────────────────────
+// ─── Ollama call ─────────────────────────────────────────────────────────────
 
 async function callGemma(prompt) {
-  const model = getClient().getGenerativeModel({
-    model: MODEL,
-    generationConfig: {
-      temperature: 0.2,
-      maxOutputTokens: 1024,
-      responseMimeType: "application/json",
-    },
-  });
-  const result = await model.generateContent(prompt);
-  return result.response.text().trim();
+  const { data } = await axios.post(
+    `${OLLAMA_URL}/api/generate`,
+    { model: MODEL, prompt, stream: false, options: { temperature: 0.2, num_predict: 1024 } },
+    { timeout: 60000 }
+  );
+  return data.response.trim();
 }
 
 function extractJSON(text) {

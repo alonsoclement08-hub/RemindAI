@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  name          String?
+  tier          Tier     @default(free)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  reminders            Reminder[]
+  syncLogs             SyncLog[]
+  deviceTokens         DeviceToken[]
+  notificationHistory  NotificationHistory[]
+
+  @@map("users")
+}
+
+model Reminder {
+  id          String     @id @default(uuid())
+  userId      String     @map("user_id")
+  title       String
+  scheduledAt DateTime?  @map("scheduled_at")
+  completedAt DateTime?  @map("completed_at")
+  deletedAt   DateTime?  @map("deleted_at")
+  priority    Int        @default(2)
+  category    Category   @default(personal)
+  contextAi   String?    @map("context_ai")
+  syncStatus  SyncStatus @default(pending) @map("sync_status")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  user                User                  @relation(fields: [userId], references: [id])
+  syncLogs            SyncLog[]
+  notificationHistory NotificationHistory[]
+
+  @@index([scheduledAt])
+  @@index([syncStatus])
+  @@map("reminders")
+}
+
+model SyncLog {
+  id              String     @id @default(uuid())
+  userId          String     @map("user_id")
+  reminderId      String     @map("reminder_id")
+  action          SyncAction
+  syncStatus      SyncStatus @default(pending) @map("sync_status")
+  clientTimestamp DateTime   @map("client_timestamp")
+  serverTimestamp DateTime   @default(now()) @map("server_timestamp")
+
+  user     User     @relation(fields: [userId], references: [id])
+  reminder Reminder @relation(fields: [reminderId], references: [id])
+
+  @@map("sync_logs")
+}
+
+model DeviceToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  platform  Platform
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("device_tokens")
+}
+
+model NotificationHistory {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  reminderId String    @map("reminder_id")
+  sentAt     DateTime  @default(now()) @map("sent_at")
+  openedAt   DateTime? @map("opened_at")
+  platform   Platform
+
+  user     User     @relation(fields: [userId], references: [id])
+  reminder Reminder @relation(fields: [reminderId], references: [id])
+
+  @@map("notification_history")
+}
+
+enum Tier {
+  free
+  pro
+}
+
+enum Category {
+  work
+  personal
+  health
+  errand
+  habit
+}
+
+enum SyncStatus {
+  pending
+  synced
+  conflict
+}
+
+enum SyncAction {
+  create
+  update
+  delete
+}
+
+enum Platform {
+  ios
+  android
+}

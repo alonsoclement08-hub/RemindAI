@@ -1,14 +1,15 @@
 const express = require("express");
 const authMiddleware = require("../middleware/auth");
 const { validate } = require("../middleware/validate");
-const { parseSchema, adviceSchema, chatSchema, suggestSchema } = require("../schemas/ai");
+const { parseSchema, adviceSchema, chatSchema, recommendationsSchema, suggestSchema } = require("../schemas/ai");
 const gemmaService = require("../services/gemma");
+const { detectQCM } = require("../utils/detectQCM");
+const qcmTemplates = require("../utils/qcmTemplates");
 
 const router = express.Router();
 router.use(authMiddleware);
 
 // POST /api/ai/parse
-// Parse reminder text with Gemma and return structured entities
 router.post("/parse", validate(parseSchema), async (req, res) => {
   const { text } = req.body;
   try {
@@ -21,7 +22,6 @@ router.post("/parse", validate(parseSchema), async (req, res) => {
 });
 
 // POST /api/ai/advice
-// Get intelligent advice and suggestions after a reminder is created
 router.post("/advice", validate(adviceSchema), async (req, res) => {
   try {
     const result = await gemmaService.getAdvice(req.body);
@@ -33,11 +33,20 @@ router.post("/advice", validate(adviceSchema), async (req, res) => {
 });
 
 // POST /api/ai/chat
-// One-shot: parse + intelligent advice in a single Ollama call
+// Parse + advice in one Ollama call; also injects QCM template when applicable
 router.post("/chat", validate(chatSchema), async (req, res) => {
   const { message } = req.body;
   try {
     const result = await gemmaService.chat(message);
+
+    // Attach QCM template if one matches (uses AI result for reminderType)
+    const qcmKey = detectQCM(
+      message,
+      result?.reminder?.category,
+      result?.reminder?.reminderType
+    );
+    result.qcm = qcmKey ? { key: qcmKey, ...qcmTemplates[qcmKey] } : null;
+
     res.json(result);
   } catch (err) {
     console.error("AI chat error:", err.message);
@@ -45,8 +54,20 @@ router.post("/chat", validate(chatSchema), async (req, res) => {
   }
 });
 
+// POST /api/ai/recommendations
+// Generate personalised advice from QCM answers
+router.post("/recommendations", validate(recommendationsSchema), async (req, res) => {
+  const { message, answers } = req.body;
+  try {
+    const result = await gemmaService.generateRecommendations(message, answers);
+    res.json(result);
+  } catch (err) {
+    console.error("AI recommendations error:", err.message);
+    res.status(503).json({ error: "AI service unavailable", detail: err.message });
+  }
+});
+
 // POST /api/ai/suggest
-// Suggest reminders based on user behaviour patterns
 router.post("/suggest", validate(suggestSchema), async (req, res) => {
   const { limit = 3, ...context } = req.body;
   try {

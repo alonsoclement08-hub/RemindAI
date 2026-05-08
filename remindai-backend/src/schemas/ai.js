@@ -42,4 +42,9 @@ const chatSchema = z.object({
   message: z.string().min(1).max(500),
 });
 
-module.exports = { parseSchema, adviceSchema, chatSchema, suggestSchema };
+const recommendationsSchema = z.object({
+  message: z.string().min(1).max(500),
+  answers: z.record(z.union([z.string(), z.array(z.string())])),
+});
+
+module.exports = { parseSchema, adviceSchema, chatSchema, recommendationsSchema, suggestSchema };

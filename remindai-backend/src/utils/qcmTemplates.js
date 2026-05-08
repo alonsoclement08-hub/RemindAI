@@ -1,0 +1,172 @@
+const templates = {
+  shopping_pet_food: {
+    message: "Pour te recommander les meilleures croquettes, dis-moi quelques infos sur ton animal",
+    questions: [
+      {
+        id: "animal",
+        type: "radio",
+        label: "Type d'animal ?",
+        options: ["Chien", "Chat", "Autre"],
+        required: true,
+      },
+      {
+        id: "race",
+        type: "dropdown",
+        label: "Race ?",
+        options: ["Labrador", "Berger Allemand", "Golden Retriever", "Chihuahua", "Bulldog", "Yorkshire", "Beagle", "Autre"],
+        required: false,
+      },
+      {
+        id: "age",
+        type: "radio",
+        label: "Âge ?",
+        options: ["0–2 ans", "2–5 ans", "5+ ans"],
+        required: true,
+      },
+      {
+        id: "budget",
+        type: "radio",
+        label: "Budget ?",
+        options: ["< 20 €", "20–50 €", "> 50 €"],
+        required: true,
+      },
+      {
+        id: "allergies",
+        type: "checkbox",
+        label: "Allergies connues ?",
+        options: ["Poulet", "Bœuf", "Gluten", "Poisson", "Aucune"],
+        required: false,
+      },
+    ],
+  },
+
+  shopping_general: {
+    message: "Quelques infos pour mieux organiser ton rappel",
+    questions: [
+      {
+        id: "when",
+        type: "radio",
+        label: "Quand veux-tu ce rappel ?",
+        options: ["Aujourd'hui", "Demain", "Cette semaine", "Flexible"],
+        required: true,
+      },
+      {
+        id: "budget",
+        type: "radio",
+        label: "Budget approximatif ?",
+        options: ["< 20 €", "20–100 €", "> 100 €", "Pas de limite"],
+        required: false,
+      },
+    ],
+  },
+
+  call: {
+    message: "Pour préparer ton appel au mieux",
+    questions: [
+      {
+        id: "time",
+        type: "radio",
+        label: "À quelle heure ?",
+        options: ["Matin (7h–12h)", "Après-midi (12h–18h)", "Soir (18h+)"],
+        required: true,
+      },
+      {
+        id: "duration",
+        type: "radio",
+        label: "Durée prévue ?",
+        options: ["Rapide (< 5 min)", "Normal (15–30 min)", "Long (1h+)"],
+        required: false,
+      },
+      {
+        id: "topic",
+        type: "radio",
+        label: "Objet de l'appel ?",
+        options: ["Juste discuter", "Info importante", "Problème urgent", "Autre"],
+        required: false,
+      },
+    ],
+  },
+
+  study: {
+    message: "Construisons ton plan de révision ensemble",
+    questions: [
+      {
+        id: "subject",
+        type: "dropdown",
+        label: "Matière ?",
+        options: ["Mathématiques", "Français", "Histoire-Géo", "Sciences", "Anglais", "Physique-Chimie", "Autre"],
+        required: true,
+      },
+      {
+        id: "duration",
+        type: "radio",
+        label: "Temps disponible ?",
+        options: ["30 min", "1 heure", "2 heures", "Toute la session"],
+        required: true,
+      },
+      {
+        id: "when",
+        type: "radio",
+        label: "Moment préféré ?",
+        options: ["Matin", "Après-midi", "Soir", "Flexible"],
+        required: true,
+      },
+      {
+        id: "difficulty",
+        type: "radio",
+        label: "Niveau de difficulté ?",
+        options: ["Facile", "Moyen", "Difficile"],
+        required: false,
+      },
+    ],
+  },
+
+  appointment: {
+    message: "Organisons les notifications pour ton rendez-vous",
+    questions: [
+      {
+        id: "notify",
+        type: "checkbox",
+        label: "Rappels souhaités ?",
+        options: ["1 jour avant", "2 heures avant", "1 heure avant", "15 min avant"],
+        required: true,
+      },
+      {
+        id: "travel",
+        type: "radio",
+        label: "Temps de trajet ?",
+        options: ["< 5 min à pied", "10–30 min en voiture", "30 min+", "Pas de déplacement"],
+        required: false,
+      },
+    ],
+  },
+
+  medication: {
+    message: "Configurons ton rappel de médicament",
+    questions: [
+      {
+        id: "frequency",
+        type: "radio",
+        label: "Fréquence ?",
+        options: ["1×/jour", "2×/jour", "3×/jour", "Autre"],
+        required: true,
+      },
+      {
+        id: "time_pref",
+        type: "radio",
+        label: "À quelle heure ?",
+        options: ["Matin (8h)", "Midi (12h)", "Soir (20h)", "Personnalisé"],
+        required: true,
+      },
+      {
+        id: "with_meal",
+        type: "radio",
+        label: "Avec repas ?",
+        options: ["Oui, obligatoire", "Recommandé", "Non"],
+        required: false,
+      },
+    ],
+  },
+};
+
+module.exports = templates;

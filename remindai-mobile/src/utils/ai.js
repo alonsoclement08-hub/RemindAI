@@ -46,6 +46,17 @@ export const aiClient = {
     }
   },
 
+  // Returns { intro, recommendations, avoid, tip, reminderTitle }
+  async getRecommendations(message, answers) {
+    if (!checkRateLimit()) return null;
+    try {
+      const { data } = await client.post('/ai/recommendations', { message, answers });
+      return data;
+    } catch {
+      return null;
+    }
+  },
+
   // Returns { advice, suggestions, optimizations, questions, confirmationText }
   async getAdvice(reminder) {
     if (!checkRateLimit()) return null;

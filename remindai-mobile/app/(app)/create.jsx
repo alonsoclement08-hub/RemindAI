@@ -13,7 +13,10 @@ export default function CreateScreen() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [messages, setMessages] = useState([]);
+  const [recommendations, setRecommendations] = useState(null);
+  const [originalMessage, setOriginalMessage] = useState('');
   const { create, reminders } = useRemindersStore();
   const router = useRouter();
 
@@ -37,19 +40,19 @@ export default function CreateScreen() {
     if (!text.trim()) return;
     setLoading(true);
     const userText = text.trim();
+    setOriginalMessage(userText);
+    setRecommendations(null);
     try {
       const res = await aiClient.chat(userText);
       if (res?.reminder) {
-        setMessages((prev) => [
-          ...prev,
+        setMessages([
           { role: 'user', text: userText },
           { role: 'ai', response: res },
         ]);
       } else {
-        // Offline fallback
+        // Offline fallback — local NLP
         const parsed = parseNLP(userText);
-        setMessages((prev) => [
-          ...prev,
+        setMessages([
           { role: 'user', text: userText },
           { role: 'ai', response: {
             reminder: {
@@ -61,13 +64,23 @@ export default function CreateScreen() {
             advice: 'Rappel analysé. Vérifie les détails et confirme.',
             suggestions: [],
             questions: [],
-            nextStep: null,
+            qcm: null,
           }},
         ]);
       }
     } finally {
       setLoading(false);
       setInput('');
+    }
+  };
+
+  const handleQCMAnswers = async (answers) => {
+    setLoadingRecommendations(true);
+    try {
+      const reco = await aiClient.getRecommendations(originalMessage, answers);
+      setRecommendations(reco);
+    } finally {
+      setLoadingRecommendations(false);
     }
   };
 
@@ -110,14 +123,18 @@ export default function CreateScreen() {
           <Text style={styles.title}>RemindAI Chat</Text>
         </View>
 
-        {/* Empty state with example prompts */}
+        {/* Empty state */}
         {messages.length === 0 && !loading && (
           <View style={styles.hint}>
             <Text style={styles.hintText}>
               Dis-moi ce dont tu dois te souvenir.{'\n'}Je crée le rappel et te donne des conseils.
             </Text>
             <View style={styles.examples}>
-              {['"Appeler maman à 15h"', '"Acheter du lait demain"', '"Réviser maths vendredi"'].map((ex) => (
+              {[
+                '"Acheter des croquettes pour mon chien"',
+                '"Appeler maman"',
+                '"Réviser maths vendredi"',
+              ].map((ex) => (
                 <Pressable
                   key={ex}
                   style={styles.examplePill}
@@ -138,12 +155,15 @@ export default function CreateScreen() {
               response={lastAiMessage.response}
               onConfirm={handleConfirm}
               onFollowUp={(q) => handleAnalyze(q)}
+              onQCMAnswers={handleQCMAnswers}
               saving={saving}
+              loadingRecommendations={loadingRecommendations}
+              recommendations={recommendations}
             />
           </View>
         )}
 
-        {/* Thinking indicator */}
+        {/* Analyzing indicator */}
         {loading && (
           <View style={styles.thinkingRow}>
             <View style={styles.aiAvatar}>
@@ -157,27 +177,38 @@ export default function CreateScreen() {
         )}
       </ScrollView>
 
-      {/* Input bar */}
-      <View style={styles.inputBar}>
-        <TextInput
-          style={styles.input}
-          placeholder={messages.length === 0 ? '"Appeler maman à 15h"' : 'Nouveau rappel...'}
-          placeholderTextColor="#bbb"
-          value={input}
-          onChangeText={setInput}
-          multiline
-          maxLength={500}
-          testID="reminder-input"
-        />
-        <Pressable
-          style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
-          onPress={() => handleAnalyze()}
-          disabled={!input.trim() || loading}
-          testID="parse-button"
-        >
-          <Text style={styles.sendBtnText}>→</Text>
-        </Pressable>
-      </View>
+      {/* Input bar — hidden once QCM or recommendations are active */}
+      {messages.length === 0 && (
+        <View style={styles.inputBar}>
+          <TextInput
+            style={styles.input}
+            placeholder='"Acheter des croquettes pour mon chien"'
+            placeholderTextColor="#bbb"
+            value={input}
+            onChangeText={setInput}
+            multiline
+            maxLength={500}
+            testID="reminder-input"
+          />
+          <Pressable
+            style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
+            onPress={() => handleAnalyze()}
+            disabled={!input.trim() || loading}
+            testID="parse-button"
+          >
+            <Text style={styles.sendBtnText}>→</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* New reminder button — shown after advice */}
+      {messages.length > 0 && !loading && (
+        <View style={styles.inputBar}>
+          <Pressable style={styles.newBtn} onPress={() => { setMessages([]); setRecommendations(null); setInput(''); }}>
+            <Text style={styles.newBtnText}>+ Nouveau rappel</Text>
+          </Pressable>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -200,10 +231,7 @@ const styles = StyleSheet.create({
 
   chatArea: { paddingHorizontal: 16, paddingTop: 8 },
 
-  thinkingRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, marginTop: 12,
-  },
+  thinkingRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginTop: 12 },
   aiAvatar: {
     width: 32, height: 32, borderRadius: 16, backgroundColor: '#1D9E75',
     alignItems: 'center', justifyContent: 'center', marginRight: 10,
@@ -222,8 +250,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1, borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 20,
-    paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#222',
-    maxHeight: 100,
+    paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#222', maxHeight: 100,
   },
   sendBtn: {
     width: 44, height: 44, borderRadius: 22, backgroundColor: '#7F77DD',
@@ -231,4 +258,10 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { opacity: 0.4 },
   sendBtnText: { color: '#fff', fontSize: 20, fontWeight: '700' },
+
+  newBtn: {
+    flex: 1, borderWidth: 1, borderColor: '#7F77DD', borderRadius: 20,
+    paddingVertical: 12, alignItems: 'center',
+  },
+  newBtnText: { color: '#7F77DD', fontSize: 14, fontWeight: '600' },
 });

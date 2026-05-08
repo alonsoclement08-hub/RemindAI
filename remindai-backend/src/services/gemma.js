@@ -103,6 +103,25 @@ Questions OBLIGATOIRES si l'heure n'est pas précisée:
 missingInfo = true si scheduledAt est null. missingFields = ["time"] si heure manquante.
 missingInfo = false seulement si heure ET date sont clairement précisées dans le message.`;
 
+const RECOMMENDATIONS_PROMPT = (message, answers) => `Tu es RemindAI. Réponds TOUJOURS en français.
+
+L'utilisateur veut: "${message}"
+Ses réponses au questionnaire: ${JSON.stringify(answers)}
+
+Génère des conseils TRÈS PERSONNALISÉS. Retourne UNIQUEMENT ce JSON valide:
+{
+  "intro": "phrase d'accroche sympathique et personnalisée selon les réponses",
+  "recommendations": [
+    { "item": "Marque ou option concrète", "reason": "raison courte et précise" },
+    { "item": "Marque ou option concrète", "reason": "raison courte et précise" }
+  ],
+  "avoid": { "item": "ce qu'il faut éviter", "reason": "pourquoi en 1 phrase" },
+  "tip": "1 conseil pratique supplémentaire très utile",
+  "reminderTitle": "titre du rappel finalisé et personnalisé"
+}
+
+Sois CONCRET et SPÉCIFIQUE. Pas de conseils génériques.`;
+
 const SUGGEST_PROMPT = (context, limit) => `Suggère ${limit} rappels pertinents basés sur les habitudes de l'utilisateur.
 
 Habitudes: ${JSON.stringify(context)}
@@ -258,6 +277,18 @@ const gemmaService = {
       if (!result.missingFields) result.missingFields = [];
       if (!result.missingFields.includes('time')) result.missingFields.push('time');
     }
+
+    await cacheSet(key, result);
+    return result;
+  },
+
+  async generateRecommendations(message, answers) {
+    const key = makeCacheKey("reco", message + JSON.stringify(answers));
+    const cached = await cacheGet(key);
+    if (cached) return { ...cached, cached: true };
+
+    const raw = await callGemma(RECOMMENDATIONS_PROMPT(message, answers));
+    const result = extractJSON(raw);
 
     await cacheSet(key, result);
     return result;

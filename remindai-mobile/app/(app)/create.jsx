@@ -8,6 +8,18 @@ import { useRemindersStore } from '../../src/store/reminders.store';
 import { parseNLP } from '../../src/utils/nlp';
 import { aiClient } from '../../src/utils/ai';
 import AIChat from '../../src/components/AIChat';
+import qcmTemplates, { detectQCMLocal } from '../../src/utils/qcmTemplates';
+
+// Inject QCM into any response (AI or offline) based on local keyword detection
+function withQCM(response, message) {
+  if (response.qcm !== undefined) return response; // backend already decided
+  const key = detectQCMLocal(
+    message,
+    response.reminder?.category,
+    response.reminder?.reminderType
+  );
+  return { ...response, qcm: key ? { key, ...qcmTemplates[key] } : null };
+}
 
 export default function CreateScreen() {
   const [input, setInput] = useState('');
@@ -45,27 +57,29 @@ export default function CreateScreen() {
     try {
       const res = await aiClient.chat(userText);
       if (res?.reminder) {
+        // AI available — inject QCM if backend didn't already
         setMessages([
           { role: 'user', text: userText },
-          { role: 'ai', response: res },
+          { role: 'ai', response: withQCM(res, userText) },
         ]);
       } else {
-        // Offline fallback — local NLP
+        // Offline fallback — local NLP + client-side QCM detection
         const parsed = parseNLP(userText);
+        const baseResponse = {
+          reminder: {
+            title: parsed.title,
+            scheduledAt: parsed.scheduledAt?.toISOString?.() ?? null,
+            category: parsed.category,
+            priority: parsed.priority,
+            reminderType: null,
+          },
+          advice: '',
+          suggestions: [],
+          questions: [],
+        };
         setMessages([
           { role: 'user', text: userText },
-          { role: 'ai', response: {
-            reminder: {
-              title: parsed.title,
-              scheduledAt: parsed.scheduledAt.toISOString(),
-              category: parsed.category,
-              priority: parsed.priority,
-            },
-            advice: 'Rappel analysé. Vérifie les détails et confirme.',
-            suggestions: [],
-            questions: [],
-            qcm: null,
-          }},
+          { role: 'ai', response: withQCM(baseResponse, userText) },
         ]);
       }
     } finally {
@@ -78,7 +92,24 @@ export default function CreateScreen() {
     setLoadingRecommendations(true);
     try {
       const reco = await aiClient.getRecommendations(originalMessage, answers);
-      setRecommendations(reco);
+      if (reco) {
+        setRecommendations(reco);
+      } else {
+        // Offline fallback — build generic recommendations from QCM answers
+        const animal = answers.animal ?? 'animal';
+        const race = answers.race ? ` ${answers.race}` : '';
+        const age = answers.age ?? '';
+        setRecommendations({
+          intro: `Parfait ! Voici mes suggestions pour ton${race} ${animal.toLowerCase()} (${age}).`,
+          recommendations: [
+            { item: 'Royal Canin', reason: 'Formule adaptée à la race et à l\'âge' },
+            { item: 'Hill\'s Science Plan', reason: 'Excellent rapport qualité/prix' },
+          ],
+          avoid: { item: 'Marques entrée de gamme', reason: 'Souvent trop riches en céréales' },
+          tip: 'Changement progressif sur 7 jours pour éviter les troubles digestifs.',
+          reminderTitle: `Acheter croquettes${race} (${animal.toLowerCase()})`,
+        });
+      }
     } finally {
       setLoadingRecommendations(false);
     }

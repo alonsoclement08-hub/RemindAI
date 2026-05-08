@@ -92,9 +92,19 @@ function extractTitle(text) {
 
 export function parseNLP(text) {
   const title = extractTitle(text) || text.trim();
-  const scheduledAt = parseDate(text);
+  let scheduledAt = parseDate(text);
   const category = detectCategory(text);
   const priority = detectPriority(text);
+
+  // If the computed time is already in the past and no explicit future date
+  // was given, the user means "next occurrence" → push to tomorrow
+  const lower = text.toLowerCase();
+  const hasExplicitFuture = lower.includes('demain') || lower.includes('tomorrow')
+    || lower.includes('après-demain') || lower.includes('semaine prochaine')
+    || lower.includes('next week') || Object.keys(DAYS_FR).some((d) => lower.includes(d));
+  if (scheduledAt < new Date() && !hasExplicitFuture) {
+    scheduledAt = addDays(scheduledAt, 1);
+  }
 
   return {
     title: title.charAt(0).toUpperCase() + title.slice(1),

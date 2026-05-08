@@ -64,6 +64,64 @@ Habitudes: ${JSON.stringify(context)}
 Retourne UNIQUEMENT un tableau JSON:
 [{"title": "...", "category": "...", "priority": 2, "suggestedHour": 9, "reminderType": "..."}]`;
 
+// ─── Deterministic time resolver (overrides AI when explicit time is found) ───
+
+const TIME_KEYWORDS = [
+  ['minuit', 0], ['midi', 12], ['matin tôt', 7], ['tôt le matin', 7],
+  ['début de journée', 9], ['après-midi', 15], ['fin de journée', 17],
+  ['ce soir', 20], ['soir', 20], ['nuit', 22], ['matin', 9],
+];
+
+function resolveScheduledAt(text) {
+  const lower = text.toLowerCase();
+  let hour = null;
+  let minute = 0;
+
+  // "15h30" / "15h" / "15:30"
+  const frFull = text.match(/à?\s*(\d{1,2})[h:](\d{2})/i);
+  if (frFull) {
+    hour = parseInt(frFull[1], 10);
+    minute = parseInt(frFull[2], 10);
+  } else {
+    const frHour = text.match(/à?\s*(\d{1,2})h\b/i);
+    if (frHour) hour = parseInt(frHour[1], 10);
+  }
+
+  // "at 3pm" / "at 10:30am"
+  if (hour === null) {
+    const en = text.match(/\bat\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+    if (en) {
+      hour = parseInt(en[1], 10);
+      minute = parseInt(en[2] || 0, 10);
+      if (en[3]?.toLowerCase() === 'pm' && hour < 12) hour += 12;
+      if (en[3]?.toLowerCase() === 'am' && hour === 12) hour = 0;
+    }
+  }
+
+  // French time keywords (longest match first to avoid "matin" shadowing "matin tôt")
+  if (hour === null) {
+    for (const [kw, h] of TIME_KEYWORDS) {
+      if (lower.includes(kw)) { hour = h; break; }
+    }
+  }
+
+  if (hour === null) return null; // No time found — let AI value stand
+
+  const now = new Date();
+  const date = new Date();
+
+  if (lower.includes('après-demain')) date.setDate(date.getDate() + 2);
+  else if (lower.includes('demain') || lower.includes('tomorrow')) date.setDate(date.getDate() + 1);
+
+  date.setHours(hour, minute, 0, 0);
+
+  // If time is already past and no explicit future date was given, push to tomorrow
+  const hasExplicitFuture = lower.includes('demain') || lower.includes('tomorrow') || lower.includes('après-demain');
+  if (date < now && !hasExplicitFuture) date.setDate(date.getDate() + 1);
+
+  return date.toISOString();
+}
+
 // ─── Cache helpers ────────────────────────────────────────────────────────────
 
 function makeCacheKey(prefix, input) {
@@ -115,6 +173,10 @@ const gemmaService = {
 
     const raw = await callGemma(PARSE_PROMPT(text));
     const result = extractJSON(raw);
+
+    // Deterministic override: if text has an explicit time, trust it over the AI
+    const resolvedAt = resolveScheduledAt(text);
+    if (resolvedAt) result.scheduledAt = resolvedAt;
 
     await cacheSet(key, result);
     return result;

@@ -1,21 +1,33 @@
 const express = require("express");
 const authMiddleware = require("../middleware/auth");
 const { validate } = require("../middleware/validate");
-const { parseSchema, suggestSchema } = require("../schemas/ai");
-const ollamaService = require("../services/ollama");
+const { parseSchema, adviceSchema, suggestSchema } = require("../schemas/ai");
+const gemmaService = require("../services/gemma");
 
 const router = express.Router();
 router.use(authMiddleware);
 
 // POST /api/ai/parse
-// Parse a reminder text with Mistral 7B and return structured entities
+// Parse reminder text with Gemma and return structured entities
 router.post("/parse", validate(parseSchema), async (req, res) => {
   const { text } = req.body;
   try {
-    const result = await ollamaService.parseText(text);
+    const result = await gemmaService.parseText(text);
     res.json(result);
   } catch (err) {
     console.error("AI parse error:", err.message);
+    res.status(503).json({ error: "AI service unavailable", detail: err.message });
+  }
+});
+
+// POST /api/ai/advice
+// Get intelligent advice and suggestions after a reminder is created
+router.post("/advice", validate(adviceSchema), async (req, res) => {
+  try {
+    const result = await gemmaService.getAdvice(req.body);
+    res.json(result);
+  } catch (err) {
+    console.error("AI advice error:", err.message);
     res.status(503).json({ error: "AI service unavailable", detail: err.message });
   }
 });
@@ -25,7 +37,7 @@ router.post("/parse", validate(parseSchema), async (req, res) => {
 router.post("/suggest", validate(suggestSchema), async (req, res) => {
   const { limit = 3, ...context } = req.body;
   try {
-    const suggestions = await ollamaService.suggestReminders(context, limit);
+    const suggestions = await gemmaService.suggestReminders(context, limit);
     res.json({ suggestions });
   } catch (err) {
     console.error("AI suggest error:", err.message);

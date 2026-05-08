@@ -35,6 +35,17 @@ export const aiClient = {
     }
   },
 
+  // Returns { reminder, advice, suggestions, questions, nextStep }
+  async chat(message) {
+    if (!checkRateLimit()) return null;
+    try {
+      const { data } = await client.post('/ai/chat', { message });
+      return data;
+    } catch {
+      return null;
+    }
+  },
+
   // Returns { advice, suggestions, optimizations, questions, confirmationText }
   async getAdvice(reminder) {
     if (!checkRateLimit()) return null;

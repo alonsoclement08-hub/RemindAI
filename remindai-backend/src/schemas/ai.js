@@ -38,4 +38,8 @@ const suggestSchema = z.object({
   limit: z.number().int().min(1).max(10).default(3),
 });
 
-module.exports = { parseSchema, adviceSchema, suggestSchema };
+const chatSchema = z.object({
+  message: z.string().min(1).max(500),
+});
+
+module.exports = { parseSchema, adviceSchema, chatSchema, suggestSchema };

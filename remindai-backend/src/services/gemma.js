@@ -57,6 +57,41 @@ Guide par type de rappel:
 
 Maximum 2 suggestions et 2 optimisations. Questions seulement si l'info manquante est vraiment utile.`;
 
+const CHAT_PROMPT = (message) => `Tu es RemindAI, un assistant intelligent de rappels. Réponds toujours en français.
+
+L'utilisateur dit: "${message}"
+
+Retourne UNIQUEMENT ce JSON valide (sans markdown):
+{
+  "reminder": {
+    "title": "action principale sans date/heure/personne",
+    "scheduledAt": null,
+    "reminderType": "call|shopping|study|appointment|medication|habit|task",
+    "category": "work|personal|health|errand|habit",
+    "priority": 2,
+    "entities": {
+      "person": null,
+      "frequency": null,
+      "details": null,
+      "notifyBefore": null
+    }
+  },
+  "advice": "conseil utile et naturel (1-2 phrases, tutoie l'utilisateur)",
+  "suggestions": ["suggestion courte 1", "suggestion courte 2"],
+  "questions": ["question de clarification si vraiment utile"],
+  "nextStep": "prochaine étape en 1 phrase courte"
+}
+
+Règles par type:
+- call: propose meilleurs créneaux, SMS si court
+- shopping: géolocalisation, regrouper les achats similaires
+- study: plan Pomodoro (25min/5min), étaler sur plusieurs jours
+- appointment: propose 3 notifications (J-1, -1h, -15min)
+- medication: rappel quotidien à heure fixe, précautions
+- habit: créneau fixe selon les habitudes
+
+Max 2 suggestions. Questions seulement si vraiment nécessaire.`;
+
 const SUGGEST_PROMPT = (context, limit) => `Suggère ${limit} rappels pertinents basés sur les habitudes de l'utilisateur.
 
 Habitudes: ${JSON.stringify(context)}
@@ -189,6 +224,22 @@ const gemmaService = {
 
     const raw = await callGemma(ADVICE_PROMPT(reminder));
     const result = extractJSON(raw);
+
+    await cacheSet(key, result);
+    return result;
+  },
+
+  async chat(message) {
+    const key = makeCacheKey("chat", message);
+    const cached = await cacheGet(key);
+    if (cached) return { ...cached, cached: true };
+
+    const raw = await callGemma(CHAT_PROMPT(message));
+    const result = extractJSON(raw);
+
+    // Apply deterministic time resolution to the nested reminder object
+    const resolvedAt = resolveScheduledAt(message);
+    if (resolvedAt && result.reminder) result.reminder.scheduledAt = resolvedAt;
 
     await cacheSet(key, result);
     return result;

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet,
   ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useRemindersStore } from '../../src/store/reminders.store';
 import { parseNLP } from '../../src/utils/nlp';
 import { aiClient } from '../../src/utils/ai';
@@ -31,6 +31,14 @@ export default function CreateScreen() {
   const [originalMessage, setOriginalMessage] = useState('');
   const { create, reminders } = useRemindersStore();
   const router = useRouter();
+
+  // Reset chat state every time the screen comes into focus
+  useFocusEffect(useCallback(() => {
+    setInput('');
+    setMessages([]);
+    setRecommendations(null);
+    setOriginalMessage('');
+  }, []));
 
   const checkLimit = () => {
     const active = reminders.filter((r) => !r.completed_at && !r.deleted_at).length;
@@ -95,20 +103,8 @@ export default function CreateScreen() {
       if (reco) {
         setRecommendations(reco);
       } else {
-        // Offline fallback — build generic recommendations from QCM answers
-        const animal = answers.animal ?? 'animal';
-        const race = answers.race ? ` ${answers.race}` : '';
-        const age = answers.age ?? '';
-        setRecommendations({
-          intro: `Parfait ! Voici mes suggestions pour ton${race} ${animal.toLowerCase()} (${age}).`,
-          recommendations: [
-            { item: 'Royal Canin', reason: 'Formule adaptée à la race et à l\'âge' },
-            { item: 'Hill\'s Science Plan', reason: 'Excellent rapport qualité/prix' },
-          ],
-          avoid: { item: 'Marques entrée de gamme', reason: 'Souvent trop riches en céréales' },
-          tip: 'Changement progressif sur 7 jours pour éviter les troubles digestifs.',
-          reminderTitle: `Acheter croquettes${race} (${animal.toLowerCase()})`,
-        });
+        // AI unavailable — don't show fake recommendations, just null so user can confirm the reminder
+        setRecommendations(null);
       }
     } finally {
       setLoadingRecommendations(false);

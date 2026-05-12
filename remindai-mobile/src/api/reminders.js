@@ -3,6 +3,7 @@ import client from './client';
 export const remindersAPI = {
   async list() {
     const { data } = await client.get('/reminders');
+    // Server returns { pending, completed, archived }
     return data;
   },
 
@@ -18,6 +19,16 @@ export const remindersAPI = {
 
   async complete(id) {
     const { data } = await client.patch(`/reminders/${id}/complete`);
+    return data;
+  },
+
+  async archive(id) {
+    const { data } = await client.patch(`/reminders/${id}/archive`);
+    return data;
+  },
+
+  async restore(id) {
+    const { data } = await client.patch(`/reminders/${id}/restore`);
     return data;
   },
 

@@ -61,25 +61,27 @@ describe("POST /api/reminders", () => {
 });
 
 describe("GET /api/reminders", () => {
-  it("returns empty list initially", async () => {
+  it("returns empty sections initially", async () => {
     const res = await request(app).get("/api/reminders").set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
+    expect(res.body).toEqual({ pending: [], completed: [], archived: [] });
   });
 
-  it("returns created reminders", async () => {
+  it("returns created reminders in pending section", async () => {
     await request(app).post("/api/reminders").set("Authorization", `Bearer ${token}`).send({ title: "Task A" });
     await request(app).post("/api/reminders").set("Authorization", `Bearer ${token}`).send({ title: "Task B" });
     const res = await request(app).get("/api/reminders").set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
+    expect(res.body.pending).toHaveLength(2);
+    expect(res.body.completed).toHaveLength(0);
+    expect(res.body.archived).toHaveLength(0);
   });
 
   it("does not return other users reminders", async () => {
     const other = await createUserAndLogin("other@test.com", "password123");
     await request(app).post("/api/reminders").set("Authorization", `Bearer ${other.token}`).send({ title: "Private" });
     const res = await request(app).get("/api/reminders").set("Authorization", `Bearer ${token}`);
-    expect(res.body).toHaveLength(0);
+    expect(res.body.pending).toHaveLength(0);
   });
 });
 
@@ -124,12 +126,12 @@ describe("DELETE /api/reminders/:id", () => {
     expect(del.status).toBe(200);
 
     const list = await request(app).get("/api/reminders").set("Authorization", `Bearer ${token}`);
-    expect(list.body).toHaveLength(0);
+    expect(list.body.pending).toHaveLength(0);
   });
 });
 
 describe("PATCH /api/reminders/:id/complete", () => {
-  it("marks a reminder as completed", async () => {
+  it("marks a one-time reminder as completed", async () => {
     const created = await request(app)
       .post("/api/reminders")
       .set("Authorization", `Bearer ${token}`)
@@ -138,6 +140,91 @@ describe("PATCH /api/reminders/:id/complete", () => {
       .patch(`/api/reminders/${created.body.id}/complete`)
       .set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body.completedAt).toBeDefined();
+    expect(res.body.reminder.completedAt).toBeDefined();
+    expect(res.body.nextReminder).toBeNull();
+  });
+
+  it("creates next occurrence for daily reminder", async () => {
+    const created = await request(app)
+      .post("/api/reminders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Médicament", frequency: "daily", scheduledAt: "2026-05-12T08:00:00Z" });
+    const res = await request(app)
+      .patch(`/api/reminders/${created.body.id}/complete`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.reminder.completedAt).toBeDefined();
+    expect(res.body.nextReminder).toBeDefined();
+    expect(res.body.nextReminder.frequency).toBe("daily");
+    // Next occurrence should be one day later
+    const next = new Date(res.body.nextReminder.scheduledAt);
+    expect(next.getDate()).toBe(13); // May 13
+  });
+
+  it("moves completed reminder to completed section in GET", async () => {
+    const created = await request(app)
+      .post("/api/reminders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Tâche finie" });
+    await request(app)
+      .patch(`/api/reminders/${created.body.id}/complete`)
+      .set("Authorization", `Bearer ${token}`);
+    const list = await request(app).get("/api/reminders").set("Authorization", `Bearer ${token}`);
+    expect(list.body.completed).toHaveLength(1);
+    expect(list.body.pending).toHaveLength(0);
+  });
+});
+
+describe("PATCH /api/reminders/:id/archive + restore", () => {
+  it("archives a reminder", async () => {
+    const created = await request(app)
+      .post("/api/reminders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "À archiver" });
+    await request(app)
+      .patch(`/api/reminders/${created.body.id}/archive`)
+      .set("Authorization", `Bearer ${token}`);
+    const list = await request(app).get("/api/reminders").set("Authorization", `Bearer ${token}`);
+    expect(list.body.archived).toHaveLength(1);
+    expect(list.body.pending).toHaveLength(0);
+  });
+
+  it("restores an archived reminder to pending", async () => {
+    const created = await request(app)
+      .post("/api/reminders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "À restaurer" });
+    await request(app).patch(`/api/reminders/${created.body.id}/archive`).set("Authorization", `Bearer ${token}`);
+    await request(app).patch(`/api/reminders/${created.body.id}/restore`).set("Authorization", `Bearer ${token}`);
+    const list = await request(app).get("/api/reminders").set("Authorization", `Bearer ${token}`);
+    expect(list.body.pending).toHaveLength(1);
+    expect(list.body.archived).toHaveLength(0);
+  });
+});
+
+describe("POST /api/reminders - frequency", () => {
+  it("creates reminder with weekly frequency and days", async () => {
+    const res = await request(app)
+      .post("/api/reminders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Révision lundi",
+        frequency: "weekly",
+        frequencyDays: [1],
+        scheduledAt: "2026-05-12T10:00:00Z",
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.frequency).toBe("weekly");
+    expect(res.body.frequencyDays).toEqual([1]);
+    expect(res.body.nextOccurrence).toBeDefined();
+  });
+
+  it("creates reminder with call category", async () => {
+    const res = await request(app)
+      .post("/api/reminders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Appeler docteur", category: "call" });
+    expect(res.status).toBe(201);
+    expect(res.body.category).toBe("call");
   });
 });

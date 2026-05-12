@@ -5,6 +5,7 @@ const { parseSchema, adviceSchema, chatSchema, recommendationsSchema, suggestSch
 const gemmaService = require("../services/gemma");
 const { detectQCM } = require("../utils/detectQCM");
 const qcmTemplates = require("../utils/qcmTemplates");
+const { getSmartRecommendations } = require("../services/aiRecommendations");
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -75,6 +76,17 @@ router.post("/suggest", validate(suggestSchema), async (req, res) => {
     res.json({ suggestions });
   } catch (err) {
     console.error("AI suggest error:", err.message);
+    res.status(503).json({ error: "AI service unavailable", detail: err.message });
+  }
+});
+
+// GET /api/ai/smart-recommendations — personalized suggestions from user history
+router.get("/smart-recommendations", async (req, res) => {
+  try {
+    const result = await getSmartRecommendations(req.user.userId);
+    res.json(result);
+  } catch (err) {
+    console.error("Smart recommendations error:", err.message);
     res.status(503).json({ error: "AI service unavailable", detail: err.message });
   }
 });

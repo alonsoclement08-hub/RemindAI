@@ -19,6 +19,10 @@ app.use("/api/health", require("./routes/health"));
 // Protected routes
 app.use("/api/auth", authLimiter, require("./routes/auth"));
 app.use("/api/reminders", apiLimiter, require("./routes/reminders"));
+app.use("/api/dashboard", apiLimiter, require("./routes/dashboard"));
+app.use("/api/location", apiLimiter, require("./routes/location"));
+app.use("/api/products", apiLimiter, require("./routes/products"));
+app.use("/api/budget", apiLimiter, require("./routes/budget"));
 app.use("/api/ai", apiLimiter, require("./routes/ai"));
 
 app.use(errorHandler);

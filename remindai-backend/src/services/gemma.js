@@ -309,3 +309,5 @@ const gemmaService = {
 };
 
 module.exports = gemmaService;
+module.exports.callGemma = callGemma;
+module.exports.extractJSON = extractJSON;

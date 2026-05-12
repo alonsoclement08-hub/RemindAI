@@ -5,9 +5,28 @@ const MAX_QUEUE_SIZE = 1000;
 
 let db = null;
 
+const COLUMN_MIGRATIONS = [
+  "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS archived_at TEXT",
+  "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS frequency TEXT DEFAULT 'once'",
+  "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS frequency_days TEXT",
+  "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS next_occurrence TEXT",
+  "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS notify_before INTEGER",
+  "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS description TEXT",
+  "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS use_geolocation INTEGER DEFAULT 0",
+  "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS location_name TEXT",
+  "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS location_lat REAL",
+  "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS location_lng REAL",
+  "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS location_radius INTEGER DEFAULT 500",
+  "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS geo_notified INTEGER DEFAULT 0",
+];
+
 export const initDB = async () => {
   db = await SQLite.openDatabaseAsync('remindai.db');
   await db.execAsync(initSchema);
+  // Apply column migrations for existing databases
+  for (const sql of COLUMN_MIGRATIONS) {
+    try { await db.execAsync(sql); } catch (_) { /* column already exists */ }
+  }
   return db;
 };
 
@@ -22,8 +41,10 @@ export const localDB = {
   async createReminder(reminder) {
     await getDB().runAsync(
       `INSERT OR REPLACE INTO reminders
-       (id, title, description, category, scheduled_at, priority, context_ai, sync_status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, title, description, category, scheduled_at, priority, frequency, frequency_days,
+        next_occurrence, notify_before, use_geolocation, location_name, location_lat, location_lng,
+        location_radius, geo_notified, context_ai, sync_status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         reminder.id,
         reminder.title,
@@ -31,6 +52,16 @@ export const localDB = {
         reminder.category || 'personal',
         reminder.scheduled_at || reminder.scheduledAt || null,
         reminder.priority || 2,
+        reminder.frequency || 'once',
+        reminder.frequency_days ? JSON.stringify(reminder.frequency_days) : null,
+        reminder.next_occurrence || null,
+        reminder.notify_before || null,
+        reminder.use_geolocation ? 1 : 0,
+        reminder.location_name || null,
+        reminder.location_lat ?? null,
+        reminder.location_lng ?? null,
+        reminder.location_radius ?? 500,
+        reminder.geo_notified ? 1 : 0,
         reminder.context_ai || null,
         reminder.sync_status || 'pending',
         reminder.created_at || new Date().toISOString(),
@@ -40,9 +71,13 @@ export const localDB = {
   },
 
   async getReminders() {
-    return getDB().getAllAsync(
+    const rows = await getDB().getAllAsync(
       'SELECT * FROM reminders WHERE deleted_at IS NULL ORDER BY scheduled_at ASC, created_at DESC'
     );
+    return rows.map((r) => ({
+      ...r,
+      frequency_days: r.frequency_days ? JSON.parse(r.frequency_days) : null,
+    }));
   },
 
   async getReminder(id) {

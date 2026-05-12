@@ -6,13 +6,28 @@ export const initSchema = `
     category TEXT DEFAULT 'personal',
     scheduled_at TEXT,
     completed_at TEXT,
+    archived_at TEXT,
     priority INTEGER DEFAULT 2,
+    frequency TEXT DEFAULT 'once',
+    frequency_days TEXT,
+    next_occurrence TEXT,
+    notify_before INTEGER,
+    use_geolocation INTEGER DEFAULT 0,
+    location_name TEXT,
+    location_lat REAL,
+    location_lng REAL,
+    location_radius INTEGER DEFAULT 500,
+    geo_notified INTEGER DEFAULT 0,
     context_ai TEXT,
     sync_status TEXT DEFAULT 'pending',
     deleted_at TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
+
+  -- Migration: add columns to existing DB (no-op if already present)
+  CREATE TABLE IF NOT EXISTS _migrations (key TEXT PRIMARY KEY);
+
 
   CREATE TABLE IF NOT EXISTS sync_queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

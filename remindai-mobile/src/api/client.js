@@ -5,7 +5,7 @@ import { storage } from '../utils/storage';
 // On Android emulator, localhost resolves to the emulator itself — use 10.0.2.2 instead.
 // On a real device, set EXPO_PUBLIC_API_URL to your machine's LAN IP (e.g. http://192.168.1.42:3000/api).
 const DEV_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${DEV_HOST}:3000/api`;
+const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${DEV_HOST}:4000/api`;
 
 console.log(`[API] base URL: ${API_URL}`);
 

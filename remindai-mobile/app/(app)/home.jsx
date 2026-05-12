@@ -9,10 +9,10 @@ import ReminderCard from '../../src/components/ReminderCard';
 import SummaryBar from '../../src/components/SummaryBar';
 
 export default function HomeScreen() {
-  const { reminders, isLoading, load, sync, complete, snooze, getSections } = useRemindersStore();
+  const { reminders, isLoading, load, sync, complete, snooze, getTimeSections } = useRemindersStore();
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState(null);
-  const sections = getSections();
+  const sections = getTimeSections();
 
   useFocusEffect(useCallback(() => { load(); }, []));
 
@@ -25,8 +25,9 @@ export default function HomeScreen() {
 
   const visible = (key) => activeFilter === null || activeFilter === key;
 
+  const completedCount = reminders.filter((r) => r.completedAt).length;
   const completionRate = reminders.length > 0
-    ? Math.round((sections.completed.length / reminders.length) * 100)
+    ? Math.round((completedCount / reminders.length) * 100)
     : 0;
 
   if (isLoading && reminders.length === 0) {

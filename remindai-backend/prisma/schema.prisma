@@ -15,6 +15,7 @@ model User {
   createdAt     DateTime @default(now()) @map("created_at")
 
   reminders            Reminder[]
+  budgets              Budget[]
   syncLogs             SyncLog[]
   deviceTokens         DeviceToken[]
   notificationHistory  NotificationHistory[]
@@ -23,18 +24,30 @@ model User {
 }
 
 model Reminder {
-  id          String     @id @default(uuid())
-  userId      String     @map("user_id")
-  title       String
-  scheduledAt DateTime?  @map("scheduled_at")
-  completedAt DateTime?  @map("completed_at")
-  deletedAt   DateTime?  @map("deleted_at")
-  priority    Int        @default(2)
-  category    Category   @default(personal)
-  contextAi   String?    @map("context_ai")
-  syncStatus  SyncStatus @default(pending) @map("sync_status")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
+  id              String      @id @default(uuid())
+  userId          String      @map("user_id")
+  title           String
+  description     String?
+  scheduledAt     DateTime?   @map("scheduled_at")
+  completedAt     DateTime?   @map("completed_at")
+  deletedAt       DateTime?   @map("deleted_at")
+  archivedAt      DateTime?   @map("archived_at")
+  priority        Int         @default(2)
+  category        Category    @default(personal)
+  frequency       Frequency   @default(once)
+  frequencyDays   Json?       @map("frequency_days")
+  nextOccurrence  DateTime?   @map("next_occurrence")
+  contextAi       String?     @map("context_ai")
+  notifyBefore    Int?        @map("notify_before")
+  useGeolocation  Boolean     @default(false) @map("use_geolocation")
+  locationName    String?     @map("location_name")
+  locationLat     Float?      @map("location_lat")
+  locationLng     Float?      @map("location_lng")
+  locationRadius  Int         @default(500) @map("location_radius")
+  geoNotified     Boolean     @default(false) @map("geo_notified")
+  syncStatus      SyncStatus  @default(pending) @map("sync_status")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
   user                User                  @relation(fields: [userId], references: [id])
   syncLogs            SyncLog[]
@@ -42,7 +55,24 @@ model Reminder {
 
   @@index([scheduledAt])
   @@index([syncStatus])
+  @@index([useGeolocation, geoNotified])
   @@map("reminders")
+}
+
+model Budget {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  category       String   @default("errand")
+  budgetLimit    Float    @map("budget_limit")
+  period         String   @default("monthly") // weekly, monthly, yearly
+  alertThreshold Float    @default(0.8) @map("alert_threshold")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, category, period])
+  @@map("budgets")
 }
 
 model SyncLog {
@@ -97,6 +127,15 @@ enum Category {
   health
   errand
   habit
+  call
+}
+
+enum Frequency {
+  once
+  daily
+  weekly
+  monthly
+  custom
 }
 
 enum SyncStatus {

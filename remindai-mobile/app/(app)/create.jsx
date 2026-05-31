@@ -4,20 +4,53 @@ import {
   ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRemindersStore } from '../../src/store/reminders.store';
 import { parseNLP } from '../../src/utils/nlp';
 import { aiClient } from '../../src/utils/ai';
 import AIChat from '../../src/components/AIChat';
 import qcmTemplates, { detectQCMLocal } from '../../src/utils/qcmTemplates';
+import { C, RADIUS, SP, SHADOW } from '../../src/theme';
 
-// Inject QCM into any response (AI or offline) based on local keyword detection
+const SUGGESTIONS = [
+  { emoji: '📞', text: 'Appeler maman demain à 18h' },
+  { emoji: '🥖', text: 'Acheter du pain ce soir en rentrant' },
+  { emoji: '🧘', text: 'Méditer 10 minutes chaque matin à 8h' },
+  { emoji: '✉️', text: 'Envoyer le contrat à Léa avant vendredi' },
+];
+
+function buildStudyReco(message, answers) {
+  const subject = answers.subject || 'ta matière';
+  const type = answers.type || '';
+  const duration = answers.duration || '1 heure';
+  const difficulty = answers.difficulty || 'Moyen';
+  const usesFlashcards = type.includes('Flashcard') || type.includes('Mémorisation');
+  const usesExercises  = type.includes('Exercice');
+  const recommendations = [
+    { item: 'Technique Pomodoro', reason: `Travaille 25 min en pleine concentration, puis pause 5 min.` },
+  ];
+  if (usesFlashcards) {
+    recommendations.push({ item: 'Floka (application gratuite)', reason: 'Crée des flashcards sur les notions clés de ' + subject + '.' });
+  } else if (usesExercises) {
+    recommendations.push({ item: 'Active recall', reason: 'Ferme ton cours et résous des exercices sans regarder les corrections.' });
+  } else {
+    recommendations.push({ item: 'Répétition espacée', reason: 'Relis tes notes à intervalles croissants : ce soir → +1 jour → +3 jours.' });
+  }
+  if (difficulty === 'Difficile') {
+    recommendations.push({ item: 'Méthode Feynman', reason: 'Explique la notion comme si tu l\'enseignais à quelqu\'un.' });
+  }
+  return {
+    intro: `Plan de révision pour ${subject} — ${duration}`,
+    recommendations,
+    avoid: usesFlashcards ? null : { item: 'Relire passivement sans tester', reason: 'Le sentiment de "je connais" est trompeur.' },
+    tip: `💡 Commence par les points que tu maîtrises le moins.`,
+  };
+}
+
 function withQCM(response, message) {
-  if (response.qcm !== undefined) return response; // backend already decided
-  const key = detectQCMLocal(
-    message,
-    response.reminder?.category,
-    response.reminder?.reminderType
-  );
+  if (response.qcm !== undefined) return response;
+  const key = detectQCMLocal(message, response.reminder?.category, response.reminder?.reminderType);
   return { ...response, qcm: key ? { key, ...qcmTemplates[key] } : null };
 }
 
@@ -29,15 +62,17 @@ export default function CreateScreen() {
   const [messages, setMessages] = useState([]);
   const [recommendations, setRecommendations] = useState(null);
   const [originalMessage, setOriginalMessage] = useState('');
+  const [qcmAnswered, setQcmAnswered] = useState(false);
   const { create, reminders } = useRemindersStore();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
-  // Reset chat state every time the screen comes into focus
   useFocusEffect(useCallback(() => {
     setInput('');
     setMessages([]);
     setRecommendations(null);
     setOriginalMessage('');
+    setQcmAnswered(false);
   }, []));
 
   const checkLimit = () => {
@@ -65,13 +100,11 @@ export default function CreateScreen() {
     try {
       const res = await aiClient.chat(userText);
       if (res?.reminder) {
-        // AI available — inject QCM if backend didn't already
         setMessages([
           { role: 'user', text: userText },
           { role: 'ai', response: withQCM(res, userText) },
         ]);
       } else {
-        // Offline fallback — local NLP + client-side QCM detection
         const parsed = parseNLP(userText);
         const baseResponse = {
           reminder: {
@@ -97,14 +130,18 @@ export default function CreateScreen() {
   };
 
   const handleQCMAnswers = async (answers) => {
+    setQcmAnswered(true);
     setLoadingRecommendations(true);
     try {
       const reco = await aiClient.getRecommendations(originalMessage, answers);
       if (reco) {
         setRecommendations(reco);
       } else {
-        // AI unavailable — don't show fake recommendations, just null so user can confirm the reminder
-        setRecommendations(null);
+        const lastAiMsg = messages.filter((m) => m.role === 'ai').slice(-1)[0];
+        const qcmKey = lastAiMsg?.response?.qcm?.key;
+        if (qcmKey === 'study') {
+          setRecommendations(buildStudyReco(originalMessage, answers));
+        }
       }
     } finally {
       setLoadingRecommendations(false);
@@ -122,8 +159,9 @@ export default function CreateScreen() {
         priority: reminder.priority ?? 2,
       });
       router.back();
-    } catch {
-      Alert.alert('Erreur', 'Impossible de créer le rappel');
+    } catch (err) {
+      console.error('[CREATE] handleConfirm failed:', err);
+      Alert.alert('Erreur', err?.message || 'Impossible de créer le rappel');
     } finally {
       setSaving(false);
     }
@@ -131,43 +169,55 @@ export default function CreateScreen() {
 
   const lastAiMessage = messages.filter((m) => m.role === 'ai').slice(-1)[0];
   const lastUserMessage = messages.filter((m) => m.role === 'user').slice(-1)[0];
+  const isEmpty = messages.length === 0 && !loading;
 
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView
-        style={styles.container}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 40 }}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>✕</Text>
-          </Pressable>
-          <Text style={styles.title}>RemindAI Chat</Text>
-        </View>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + SP.sm }]}>
+        <Pressable onPress={() => router.back()} style={styles.closeBtn}>
+          <Text style={styles.closeBtnText}>✕</Text>
+        </Pressable>
+        <Text style={styles.headerTitle}>Nouveau rappel</Text>
+        <View style={{ width: 36 }} />
+      </View>
 
-        {/* Empty state */}
-        {messages.length === 0 && !loading && (
-          <View style={styles.hint}>
-            <Text style={styles.hintText}>
-              Dis-moi ce dont tu dois te souvenir.{'\n'}Je crée le rappel et te donne des conseils.
+      <ScrollView
+        style={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Empty / suggestion state */}
+        {isEmpty && (
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.emptyBlock}>
+            <View style={styles.emptyIcon}>
+              <Text style={{ fontSize: 22, color: C.violet }}>✦</Text>
+            </View>
+            <Text style={styles.emptyTitle}>
+              Dis-moi ce dont tu dois te souvenir.
             </Text>
-            <View style={styles.examples}>
-              {[
-                '"Acheter des croquettes pour mon chien"',
-                '"Appeler maman"',
-                '"Réviser maths vendredi"',
-              ].map((ex) => (
+            <Text style={styles.emptySub}>
+              Je crée le rappel et te donne des conseils.
+            </Text>
+          </Animated.View>
+        )}
+
+        {isEmpty && (
+          <View style={styles.suggestionsBlock}>
+            <Text style={styles.suggestionsLabel}>SUGGESTIONS</Text>
+            <View style={styles.suggestionsGrid}>
+              {SUGGESTIONS.map((s, i) => (
                 <Pressable
-                  key={ex}
-                  style={styles.examplePill}
-                  onPress={() => handleAnalyze(ex.replace(/"/g, ''))}
+                  key={i}
+                  style={({ pressed }) => [styles.suggestionChip, pressed && { opacity: 0.7 }]}
+                  onPress={() => handleAnalyze(s.text)}
                 >
-                  <Text style={styles.exampleText}>{ex}</Text>
+                  <Text style={styles.suggestionEmoji}>{s.emoji}</Text>
+                  <Text style={styles.suggestionText}>{s.text}</Text>
                 </Pressable>
               ))}
             </View>
@@ -183,6 +233,7 @@ export default function CreateScreen() {
               onConfirm={handleConfirm}
               onFollowUp={(q) => handleAnalyze(q)}
               onQCMAnswers={handleQCMAnswers}
+              qcmAnswered={qcmAnswered}
               saving={saving}
               loadingRecommendations={loadingRecommendations}
               recommendations={recommendations}
@@ -197,28 +248,35 @@ export default function CreateScreen() {
               <Text style={styles.aiAvatarText}>IA</Text>
             </View>
             <View style={styles.thinkingBubble}>
-              <ActivityIndicator size="small" color="#7F77DD" />
-              <Text style={styles.thinkingText}>Analyse en cours...</Text>
+              <ActivityIndicator size="small" color={C.violet} />
+              <Text style={styles.thinkingText}>Analyse en cours…</Text>
             </View>
           </View>
         )}
       </ScrollView>
 
-      {/* Input bar — hidden once QCM or recommendations are active */}
+      {/* Input bar */}
       {messages.length === 0 && (
-        <View style={styles.inputBar}>
-          <TextInput
-            style={styles.input}
-            placeholder='"Acheter des croquettes pour mon chien"'
-            placeholderTextColor="#bbb"
-            value={input}
-            onChangeText={setInput}
-            multiline
-            maxLength={500}
-            testID="reminder-input"
-          />
+        <View style={[styles.inputBar, { paddingBottom: insets.bottom + SP.md }]}>
+          <View style={styles.inputWrap}>
+            <View style={styles.inputLeading}>
+              <Text style={{ color: C.violet, fontSize: 12 }}>✦</Text>
+            </View>
+            <TextInput
+              style={styles.input}
+              placeholder={'Rappelle-moi de…'}
+              placeholderTextColor={C.text4}
+              value={input}
+              onChangeText={setInput}
+              multiline
+              maxLength={500}
+              returnKeyType="send"
+              onSubmitEditing={() => handleAnalyze()}
+              testID="reminder-input"
+            />
+          </View>
           <Pressable
-            style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
+            style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnOff]}
             onPress={() => handleAnalyze()}
             disabled={!input.trim() || loading}
             testID="parse-button"
@@ -228,10 +286,13 @@ export default function CreateScreen() {
         </View>
       )}
 
-      {/* New reminder button — shown after advice */}
+      {/* New reminder button — shown after AI response */}
       {messages.length > 0 && !loading && (
-        <View style={styles.inputBar}>
-          <Pressable style={styles.newBtn} onPress={() => { setMessages([]); setRecommendations(null); setInput(''); }}>
+        <View style={[styles.inputBar, { paddingBottom: insets.bottom + SP.md }]}>
+          <Pressable
+            style={styles.newBtn}
+            onPress={() => { setMessages([]); setRecommendations(null); setQcmAnswered(false); setInput(''); }}
+          >
             <Text style={styles.newBtnText}>+ Nouveau rappel</Text>
           </Pressable>
         </View>
@@ -241,54 +302,109 @@ export default function CreateScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, paddingTop: 60 },
-  backBtn: { marginRight: 16 },
-  backText: { fontSize: 20, color: '#999' },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#222' },
-
-  hint: { paddingHorizontal: 20, paddingTop: 16 },
-  hintText: { fontSize: 16, color: '#888', lineHeight: 24, textAlign: 'center', marginBottom: 20 },
-  examples: { gap: 10, alignItems: 'flex-start' },
-  examplePill: {
-    borderWidth: 1, borderColor: '#e8e6f8', backgroundColor: '#f8f7ff',
-    borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10,
+  /* Header */
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SP.xl, paddingBottom: SP.md,
+    backgroundColor: C.bgTint, borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  exampleText: { color: '#7F77DD', fontSize: 14 },
+  closeBtn: {
+    width: 36, height: 36, borderRadius: RADIUS.sm,
+    backgroundColor: C.surface3, alignItems: 'center', justifyContent: 'center',
+  },
+  closeBtnText: { fontSize: 14, color: C.text2, fontWeight: '600' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: C.text, letterSpacing: -0.2 },
 
-  chatArea: { paddingHorizontal: 16, paddingTop: 8 },
+  scroll: { flex: 1, backgroundColor: C.bgTint },
 
-  thinkingRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginTop: 12 },
+  /* Empty state */
+  emptyBlock: {
+    alignItems: 'center', paddingTop: SP['4xl'], paddingHorizontal: SP['2xl'],
+    marginBottom: SP['2xl'],
+  },
+  emptyIcon: {
+    width: 56, height: 56, borderRadius: 18,
+    backgroundColor: C.violetSoft,
+    alignItems: 'center', justifyContent: 'center', marginBottom: SP.lg,
+  },
+  emptyTitle: {
+    fontSize: 17, fontWeight: '700', color: C.text,
+    textAlign: 'center', letterSpacing: -0.2, marginBottom: SP.sm,
+  },
+  emptySub: { fontSize: 14, color: C.text3, textAlign: 'center', lineHeight: 20 },
+
+  /* Suggestions */
+  suggestionsBlock: { paddingHorizontal: SP.xl },
+  suggestionsLabel: {
+    fontSize: 11, fontWeight: '700', color: C.text4,
+    letterSpacing: 1, marginBottom: SP.md,
+  },
+  suggestionsGrid: { gap: SP.sm },
+  suggestionChip: {
+    flexDirection: 'row', alignItems: 'center', gap: SP.md,
+    backgroundColor: C.surface, borderRadius: RADIUS.card,
+    paddingHorizontal: SP.lg, paddingVertical: SP.md,
+    borderWidth: 1, borderColor: C.border,
+    ...SHADOW.sm,
+  },
+  suggestionEmoji: { fontSize: 18 },
+  suggestionText: { fontSize: 14, color: C.text2, flex: 1 },
+
+  chatArea: { paddingHorizontal: SP.lg, paddingTop: SP.sm },
+
+  /* Thinking */
+  thinkingRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: SP.xl, marginTop: SP.md,
+  },
   aiAvatar: {
-    width: 32, height: 32, borderRadius: 16, backgroundColor: '#1D9E75',
-    alignItems: 'center', justifyContent: 'center', marginRight: 10,
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: C.violet, alignItems: 'center', justifyContent: 'center', marginRight: SP.md,
   },
-  aiAvatarText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  aiAvatarText: { color: '#fff', fontSize: 9, fontWeight: '700' },
   thinkingBubble: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#f4f4f8', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10,
+    flexDirection: 'row', alignItems: 'center', gap: SP.sm,
+    backgroundColor: C.surface, borderRadius: RADIUS.card,
+    paddingHorizontal: SP.md, paddingVertical: SP.sm,
+    borderWidth: 1, borderColor: C.border,
   },
-  thinkingText: { color: '#999', fontSize: 14 },
+  thinkingText: { color: C.text3, fontSize: 14 },
 
+  /* Input bar */
   inputBar: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: 10,
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderTopWidth: 1, borderTopColor: '#f0f0f0', backgroundColor: '#fff',
+    flexDirection: 'row', alignItems: 'flex-end', gap: SP.sm,
+    paddingHorizontal: SP.xl, paddingTop: SP.md,
+    borderTopWidth: 1, borderTopColor: C.border,
+    backgroundColor: C.surface,
+  },
+  inputWrap: {
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.bg, borderRadius: RADIUS.card,
+    borderWidth: 1.5, borderColor: C.border,
+    paddingHorizontal: SP.md, minHeight: 48,
+  },
+  inputLeading: {
+    width: 28, height: 28, borderRadius: 9,
+    backgroundColor: C.violetSoft,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: SP.sm,
   },
   input: {
-    flex: 1, borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 20,
-    paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#222', maxHeight: 100,
+    flex: 1, fontSize: 15, color: C.text,
+    paddingVertical: SP.sm, maxHeight: 100,
   },
   sendBtn: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: '#7F77DD',
-    alignItems: 'center', justifyContent: 'center',
+    width: 46, height: 46, borderRadius: 14,
+    backgroundColor: C.violet, alignItems: 'center', justifyContent: 'center',
+    ...SHADOW.md(C.violet),
   },
-  sendBtnDisabled: { opacity: 0.4 },
+  sendBtnOff: { backgroundColor: C.surface3, shadowOpacity: 0 },
   sendBtnText: { color: '#fff', fontSize: 20, fontWeight: '700' },
 
   newBtn: {
-    flex: 1, borderWidth: 1, borderColor: '#7F77DD', borderRadius: 20,
-    paddingVertical: 12, alignItems: 'center',
+    flex: 1, height: 46, borderRadius: RADIUS.btn,
+    borderWidth: 1.5, borderColor: C.violet,
+    alignItems: 'center', justifyContent: 'center',
   },
-  newBtnText: { color: '#7F77DD', fontSize: 14, fontWeight: '600' },
+  newBtnText: { color: C.violet, fontSize: 14, fontWeight: '600' },
 });

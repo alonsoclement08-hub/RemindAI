@@ -4,6 +4,7 @@ const KEYS = {
   ACCESS_TOKEN: 'remindai_access_token',
   REFRESH_TOKEN: 'remindai_refresh_token',
   USER: 'remindai_user',
+  ONBOARDING_SEEN: 'remindai_onboarding_seen',
 };
 
 export const storage = {
@@ -27,6 +28,15 @@ export const storage = {
   async getUser() {
     const raw = await SecureStore.getItemAsync(KEYS.USER);
     return raw ? JSON.parse(raw) : null;
+  },
+
+  async setOnboardingSeen() {
+    await SecureStore.setItemAsync(KEYS.ONBOARDING_SEEN, 'true');
+  },
+
+  async getOnboardingSeen() {
+    const val = await SecureStore.getItemAsync(KEYS.ONBOARDING_SEEN);
+    return val === 'true';
   },
 
   async clearAll() {

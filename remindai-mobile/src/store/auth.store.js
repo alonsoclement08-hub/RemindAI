@@ -6,16 +6,19 @@ export const useAuthStore = create((set, get) => ({
   user: null,
   isSignedIn: false,
   isLoading: true,
+  onboardingSeen: false,
   error: null,
 
   init: async () => {
     try {
       const token = await storage.getAccessToken();
       const user = await storage.getUser();
+      const onboardingSeen = await storage.getOnboardingSeen();
       if (token && user) {
-        set({ user, isSignedIn: true });
-        // Wire up auto-logout for axios 401 handling
+        set({ user, isSignedIn: true, onboardingSeen });
         globalThis.__remindaiLogout = get().logout;
+      } else {
+        set({ onboardingSeen });
       }
     } catch {
       set({ isSignedIn: false });
@@ -38,6 +41,11 @@ export const useAuthStore = create((set, get) => ({
     set({ user: result.user, isSignedIn: true });
     globalThis.__remindaiLogout = useAuthStore.getState().logout;
     return result;
+  },
+
+  setOnboardingSeen: async () => {
+    await storage.setOnboardingSeen();
+    set({ onboardingSeen: true });
   },
 
   logout: async () => {

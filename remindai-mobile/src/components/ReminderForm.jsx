@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet, ScrollView, Modal, Alert, Switch,
 } from 'react-native';
@@ -95,7 +95,7 @@ export default function ReminderForm({ visible, reminder, onClose, onSaved }) {
 
   const [saving, setSaving] = useState(false);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setTitle('');
     setDescription('');
     setScheduledAt(null);
@@ -108,7 +108,14 @@ export default function ReminderForm({ visible, reminder, onClose, onSaved }) {
     setUseGeolocation(false);
     setLocationType('Supermarché');
     setLocationRadius(500);
-  };
+  }, []);
+
+  // Reset form each time the modal opens for a new reminder (prevents stale data)
+  useEffect(() => {
+    if (visible && !isEdit) {
+      resetForm();
+    }
+  }, [visible, isEdit, resetForm]);
 
   const toggleDay = (day) =>
     setFrequencyDays((prev) =>
@@ -153,6 +160,8 @@ export default function ReminderForm({ visible, reminder, onClose, onSaved }) {
       }
       onSaved?.();
       onClose();
+    } catch {
+      Alert.alert('Erreur', 'Impossible de sauvegarder le rappel. Réessayez.');
     } finally {
       setSaving(false);
     }

@@ -4,17 +4,23 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '../src/store/auth.store';
 
 export default function Index() {
-  const { isSignedIn, isLoading } = useAuthStore();
+  const { isSignedIn, isLoading, onboardingSeen } = useAuthStore();
   const router = useRouter();
 
   useEffect(() => {
     if (isLoading) return;
-    router.replace(isSignedIn ? '/(app)/home' : '/(auth)/login');
-  }, [isLoading, isSignedIn]);
+    if (!isSignedIn) {
+      router.replace('/(auth)/welcome');
+    } else if (!onboardingSeen) {
+      router.replace('/(auth)/onboarding');
+    } else {
+      router.replace('/(app)/home');
+    }
+  }, [isLoading, isSignedIn, onboardingSeen]);
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-      <ActivityIndicator size="large" color="#7F77DD" />
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#7F77DD' }}>
+      <ActivityIndicator size="large" color="#fff" />
     </View>
   );
 }

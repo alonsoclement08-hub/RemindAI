@@ -89,13 +89,20 @@ const qcmTemplates = {
   },
 
   study: {
-    message: "Construisons ton plan de révision ensemble",
+    message: "Construisons ton plan de révision ensemble 📚",
     questions: [
       {
         id: "subject",
-        type: "dropdown",
+        type: "radio",
         label: "Matière ?",
-        options: ["Mathématiques", "Français", "Histoire-Géo", "Sciences", "Anglais", "Physique-Chimie", "Autre"],
+        options: ["Maths", "Français", "Histoire-Géo", "Sciences", "Anglais", "Autre"],
+        required: true,
+      },
+      {
+        id: "type",
+        type: "radio",
+        label: "Type de révision ?",
+        options: ["Flashcards / Mémorisation", "Exercices pratiques", "Relecture du cours", "Résumé / Fiches"],
         required: true,
       },
       {
@@ -106,18 +113,11 @@ const qcmTemplates = {
         required: true,
       },
       {
-        id: "when",
-        type: "radio",
-        label: "Moment préféré ?",
-        options: ["Matin", "Après-midi", "Soir", "Flexible"],
-        required: true,
-      },
-      {
         id: "difficulty",
         type: "radio",
         label: "Niveau de difficulté ?",
         options: ["Facile", "Moyen", "Difficile"],
-        required: false,
+        required: true,
       },
     ],
   },

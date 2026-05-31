@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { budgetAPI } from '../api/budget';
+import { aiAPI } from '../api/ai';
 
 const CATEGORY_ICONS = { work: '💼', personal: '👤', health: '💪', errand: '🛒', habit: '🔄', call: '📞' };
 
@@ -36,6 +37,7 @@ export default function PatternsStats() {
   const [patterns, setPatterns] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [patternInsight, setPatternInsight] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +53,12 @@ export default function PatternsStats() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    aiAPI.generateAdvice({ type: 'pattern_insight' }).then((data) => {
+      if (data?.message) setPatternInsight(data.message);
+    });
+  }, []);
 
   if (loading) {
     return (
@@ -97,6 +105,15 @@ export default function PatternsStats() {
         </Pressable>
       </View>
 
+      {patternInsight && (
+        <View style={styles.insightBubble}>
+          <View style={styles.insightAvatar}>
+            <Text style={styles.insightAvatarText}>IA</Text>
+          </View>
+          <Text style={styles.insightText}>{patternInsight}</Text>
+        </View>
+      )}
+
       {topCats.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Catégories favorites</Text>
@@ -110,21 +127,21 @@ export default function PatternsStats() {
         {patterns.favoriteDay && (
           <View style={styles.gridCell}>
             <Text style={styles.gridEmoji}>📅</Text>
-            <Text style={styles.gridValue}>{patterns.favoriteDay}</Text>
+            <Text style={styles.gridValue}>{patterns.favoriteDay?.day ?? patterns.favoriteDay}</Text>
             <Text style={styles.gridLabel}>Jour préféré</Text>
           </View>
         )}
         {patterns.favoriteTime && (
           <View style={styles.gridCell}>
             <Text style={styles.gridEmoji}>🕐</Text>
-            <Text style={styles.gridValue}>{patterns.favoriteTime}</Text>
+            <Text style={styles.gridValue}>{patterns.favoriteTime?.period ?? patterns.favoriteTime}</Text>
             <Text style={styles.gridLabel}>Heure préférée</Text>
           </View>
         )}
         {patterns.lightestDay && (
           <View style={styles.gridCell}>
             <Text style={styles.gridEmoji}>😌</Text>
-            <Text style={styles.gridValue}>{patterns.lightestDay}</Text>
+            <Text style={styles.gridValue}>{patterns.lightestDay?.day ?? patterns.lightestDay}</Text>
             <Text style={styles.gridLabel}>Jour + léger</Text>
           </View>
         )}
@@ -166,6 +183,18 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 13, color: '#E0654A', textAlign: 'center' },
   retryBtn: { alignSelf: 'center', marginTop: 8, paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#f0f0f0', borderRadius: 8 },
   retryBtnText: { fontSize: 13, color: '#555' },
+
+  insightBubble: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: '#f4f3ff', borderRadius: 12, padding: 10, marginBottom: 14,
+    borderLeftWidth: 3, borderLeftColor: '#7F77DD',
+  },
+  insightAvatar: {
+    width: 22, height: 22, borderRadius: 11, backgroundColor: '#7F77DD',
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1,
+  },
+  insightAvatarText: { color: '#fff', fontSize: 8, fontWeight: '800' },
+  insightText: { flex: 1, fontSize: 13, color: '#444', lineHeight: 19 },
 
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   title: { fontSize: 16, fontWeight: '800', color: '#1a1a2e' },

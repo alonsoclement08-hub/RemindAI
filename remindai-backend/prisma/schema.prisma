@@ -7,51 +7,52 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  passwordHash  String   @map("password_hash")
-  name          String?
-  tier          Tier     @default(free)
-  createdAt     DateTime @default(now()) @map("created_at")
-
-  reminders            Reminder[]
-  budgets              Budget[]
-  syncLogs             SyncLog[]
-  deviceTokens         DeviceToken[]
-  notificationHistory  NotificationHistory[]
+  id                  String                @id @default(uuid())
+  email               String                @unique
+  passwordHash        String                @map("password_hash")
+  tier                Tier                  @default(free)
+  createdAt           DateTime              @default(now()) @map("created_at")
+  name                String?
+  budgets             Budget[]
+  deviceTokens        DeviceToken[]
+  integrations        Integration[]
+  notificationHistory NotificationHistory[]
+  reminders           Reminder[]
+  syncLogs            SyncLog[]
+  userPreferences     UserPreference[]
+  feedbacks           RecommendationFeedback[]
 
   @@map("users")
 }
 
 model Reminder {
-  id              String      @id @default(uuid())
-  userId          String      @map("user_id")
-  title           String
-  description     String?
-  scheduledAt     DateTime?   @map("scheduled_at")
-  completedAt     DateTime?   @map("completed_at")
-  deletedAt       DateTime?   @map("deleted_at")
-  archivedAt      DateTime?   @map("archived_at")
-  priority        Int         @default(2)
-  category        Category    @default(personal)
-  frequency       Frequency   @default(once)
-  frequencyDays   Json?       @map("frequency_days")
-  nextOccurrence  DateTime?   @map("next_occurrence")
-  contextAi       String?     @map("context_ai")
-  notifyBefore    Int?        @map("notify_before")
-  useGeolocation  Boolean     @default(false) @map("use_geolocation")
-  locationName    String?     @map("location_name")
-  locationLat     Float?      @map("location_lat")
-  locationLng     Float?      @map("location_lng")
-  locationRadius  Int         @default(500) @map("location_radius")
-  geoNotified     Boolean     @default(false) @map("geo_notified")
-  syncStatus      SyncStatus  @default(pending) @map("sync_status")
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
-
+  id                  String                @id @default(uuid())
+  userId              String                @map("user_id")
+  title               String
+  scheduledAt         DateTime?             @map("scheduled_at")
+  completedAt         DateTime?             @map("completed_at")
+  deletedAt           DateTime?             @map("deleted_at")
+  priority            Int                   @default(2)
+  category            Category              @default(personal)
+  contextAi           String?               @map("context_ai")
+  syncStatus          SyncStatus            @default(pending) @map("sync_status")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+  archivedAt          DateTime?             @map("archived_at")
+  description         String?
+  frequency           Frequency             @default(once)
+  frequencyDays       Json?                 @map("frequency_days")
+  nextOccurrence      DateTime?             @map("next_occurrence")
+  notifyBefore        Int?                  @map("notify_before")
+  geoNotified         Boolean               @default(false) @map("geo_notified")
+  locationLat         Float?                @map("location_lat")
+  locationLng         Float?                @map("location_lng")
+  locationName        String?               @map("location_name")
+  locationRadius      Int                   @default(500) @map("location_radius")
+  useGeolocation      Boolean               @default(false) @map("use_geolocation")
+  notificationHistory NotificationHistory[]
   user                User                  @relation(fields: [userId], references: [id])
   syncLogs            SyncLog[]
-  notificationHistory NotificationHistory[]
 
   @@index([scheduledAt])
   @@index([syncStatus])
@@ -64,12 +65,11 @@ model Budget {
   userId         String   @map("user_id")
   category       String   @default("errand")
   budgetLimit    Float    @map("budget_limit")
-  period         String   @default("monthly") // weekly, monthly, yearly
+  period         String   @default("monthly")
   alertThreshold Float    @default(0.8) @map("alert_threshold")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id])
+  user           User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, category, period])
   @@map("budgets")
@@ -83,9 +83,8 @@ model SyncLog {
   syncStatus      SyncStatus @default(pending) @map("sync_status")
   clientTimestamp DateTime   @map("client_timestamp")
   serverTimestamp DateTime   @default(now()) @map("server_timestamp")
-
-  user     User     @relation(fields: [userId], references: [id])
-  reminder Reminder @relation(fields: [reminderId], references: [id])
+  reminder        Reminder   @relation(fields: [reminderId], references: [id])
+  user            User       @relation(fields: [userId], references: [id])
 
   @@map("sync_logs")
 }
@@ -96,8 +95,7 @@ model DeviceToken {
   token     String   @unique
   platform  Platform
   createdAt DateTime @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 
   @@map("device_tokens")
 }
@@ -109,11 +107,53 @@ model NotificationHistory {
   sentAt     DateTime  @default(now()) @map("sent_at")
   openedAt   DateTime? @map("opened_at")
   platform   Platform
-
-  user     User     @relation(fields: [userId], references: [id])
-  reminder Reminder @relation(fields: [reminderId], references: [id])
+  reminder   Reminder  @relation(fields: [reminderId], references: [id])
+  user       User      @relation(fields: [userId], references: [id])
 
   @@map("notification_history")
+}
+
+model UserPreference {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  category       String
+  score          Float    @default(0.5)
+  timesCompleted Int      @default(0) @map("times_completed")
+  timesIgnored   Int      @default(0) @map("times_ignored")
+  lastUpdated    DateTime @default(now()) @updatedAt @map("last_updated")
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, category])
+  @@map("user_preferences")
+}
+
+model RecommendationFeedback {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  reminderId String?  @map("reminder_id")
+  category   String?
+  action     String
+  rating     Int?
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@map("recommendation_feedback")
+}
+
+model Integration {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  service      String
+  accessToken  String?   @map("access_token") @db.Text
+  refreshToken String?   @map("refresh_token") @db.Text
+  expiresAt    DateTime? @map("expires_at")
+  settings     Json?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  user         User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, service])
+  @@map("integrations")
 }
 
 enum Tier {

@@ -4,15 +4,17 @@ import {
 } from 'react-native';
 import { format, isValid } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { C, CAT, RADIUS, SP, SHADOW } from '../theme';
 
-const PRIORITY_COLORS = { 1: '#b0b0b0', 2: '#FFB800', 3: '#FF8C42', 4: '#E0654A' };
-const CATEGORY_ICONS = { work: '💼', personal: '👤', health: '💪', errand: '🛒', habit: '🔄' };
+const FREQ_LABELS = { daily: 'Quotidien', weekly: 'Hebdo', monthly: 'Mensuel', custom: 'Récurrent' };
 
-export default function ReminderCard({ reminder, onComplete, onSnooze }) {
+export default function ReminderCard({ reminder, onComplete, onSnooze, onPress }) {
   const [showSnooze, setShowSnooze] = useState(false);
   const pan = useRef(new Animated.ValueXY()).current;
   const checkScale = useRef(new Animated.Value(1)).current;
   const isCompleted = !!reminder.completed_at;
+
+  const cat = CAT[reminder.category] || CAT.personal;
 
   const slideOut = (callback) => {
     Animated.timing(pan.x, { toValue: 400, duration: 220, useNativeDriver: false }).start(callback);
@@ -48,9 +50,6 @@ export default function ReminderCard({ reminder, onComplete, onSnooze }) {
     onSnooze(minutes);
   };
 
-  const priorityColor = PRIORITY_COLORS[reminder.priority] || PRIORITY_COLORS[2];
-  const icon = CATEGORY_ICONS[reminder.category] || '📌';
-
   let timeText = '';
   if (reminder.scheduled_at) {
     const d = new Date(reminder.scheduled_at);
@@ -61,14 +60,25 @@ export default function ReminderCard({ reminder, onComplete, onSnooze }) {
     <View style={styles.wrapper} testID={`reminder-${reminder.id}`}>
       {/* Swipe hint background */}
       <View style={styles.swipeBg}>
-        <Text style={styles.swipeBgLeft}>✓</Text>
-        <Text style={styles.swipeBgRight}>💤</Text>
+        <View style={[styles.swipeSide, { backgroundColor: C.tealSoft }]}>
+          <Text style={[styles.swipeText, { color: C.teal }]}>✓ Terminer</Text>
+        </View>
+        <View style={[styles.swipeSide, { backgroundColor: C.violetSoft, alignItems: 'flex-end' }]}>
+          <Text style={[styles.swipeText, { color: C.violet }]}>Reporter 💤</Text>
+        </View>
       </View>
 
       <Animated.View
         {...panResponder.panHandlers}
-        style={[styles.card, { transform: [{ translateX: pan.x }] }]}
+        style={[
+          styles.card,
+          isCompleted && styles.cardDone,
+          { transform: [{ translateX: pan.x }] },
+        ]}
       >
+        {/* Category accent bar */}
+        <View style={[styles.accentBar, { backgroundColor: cat.color }]} />
+
         {/* Checkbox */}
         <Pressable
           onPress={handleCheckPress}
@@ -79,7 +89,7 @@ export default function ReminderCard({ reminder, onComplete, onSnooze }) {
           <Animated.View
             style={[
               styles.checkCircle,
-              isCompleted && styles.checkCircleDone,
+              isCompleted && { borderColor: cat.color, backgroundColor: cat.color },
               { transform: [{ scale: checkScale }] },
             ]}
           >
@@ -87,26 +97,53 @@ export default function ReminderCard({ reminder, onComplete, onSnooze }) {
           </Animated.View>
         </Pressable>
 
-        <View style={[styles.priorityBar, { backgroundColor: priorityColor }]} />
-        <Text style={styles.icon}>{icon}</Text>
-        <View style={styles.content}>
-          <Text style={[styles.title, isCompleted && styles.titleDone]} numberOfLines={2}>
-            {reminder.title}
-          </Text>
+        {/* Content */}
+        <Pressable style={styles.content} onPress={onPress} disabled={!onPress || isCompleted}>
+          <View style={styles.headerRow}>
+            <Text style={[styles.title, isCompleted && styles.titleDone]} numberOfLines={2}>
+              {reminder.title}
+            </Text>
+            {!isCompleted && onPress && (
+              <Text style={styles.chevron}>›</Text>
+            )}
+          </View>
+
           {reminder.context_ai ? (
-            <Text style={styles.context} numberOfLines={1}>{reminder.context_ai}</Text>
+            <View style={styles.aiRow}>
+              <Text style={[styles.aiDot, { color: cat.color }]}>✦</Text>
+              <Text style={styles.aiText} numberOfLines={1}>{reminder.context_ai}</Text>
+            </View>
           ) : null}
-          {timeText ? <Text style={styles.time}>{timeText}</Text> : null}
-        </View>
+
+          <View style={styles.metaRow}>
+            {timeText ? (
+              <View style={[styles.chip, { backgroundColor: cat.soft }]}>
+                <Text style={[styles.chipText, { color: cat.deep }]}>{timeText}</Text>
+              </View>
+            ) : null}
+            <View style={[styles.chip, { backgroundColor: cat.soft }]}>
+              <Text style={[styles.chipText, { color: cat.deep }]}>{cat.label}</Text>
+            </View>
+            {FREQ_LABELS[reminder.frequency] ? (
+              <View style={[styles.chip, { backgroundColor: C.tealSoft }]}>
+                <Text style={[styles.chipText, { color: C.tealDeep }]}>
+                  {FREQ_LABELS[reminder.frequency]}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </Pressable>
       </Animated.View>
 
       {showSnooze && (
         <View style={styles.snoozeRow}>
-          {[15, 60, 1440].map((mins) => (
+          {[
+            { mins: 15, label: '+15 min' },
+            { mins: 60, label: '+1 heure' },
+            { mins: 1440, label: 'Demain' },
+          ].map(({ mins, label }) => (
             <Pressable key={mins} style={styles.snoozeBtn} onPress={() => handleSnooze(mins)}>
-              <Text style={styles.snoozeBtnText}>
-                {mins === 15 ? '+15min' : mins === 60 ? '+1h' : 'Demain'}
-              </Text>
+              <Text style={styles.snoozeBtnText}>{label}</Text>
             </Pressable>
           ))}
           <Pressable style={styles.snoozeCancel} onPress={() => setShowSnooze(false)}>
@@ -119,42 +156,65 @@ export default function ReminderCard({ reminder, onComplete, onSnooze }) {
 }
 
 const styles = StyleSheet.create({
-  wrapper: { marginBottom: 10, position: 'relative' },
+  wrapper: { marginBottom: SP.sm, position: 'relative' },
+
   swipeBg: {
     ...StyleSheet.absoluteFillObject,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, borderRadius: 14,
+    flexDirection: 'row',
+    borderRadius: RADIUS.card,
+    overflow: 'hidden',
   },
-  swipeBgLeft: { fontSize: 20, color: '#1D9E75' },
-  swipeBgRight: { fontSize: 20, color: '#7F77DD' },
+  swipeSide: { flex: 1, justifyContent: 'center', paddingHorizontal: SP.xl },
+  swipeText: { fontSize: 13, fontWeight: '700' },
+
   card: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
-    borderRadius: 14, padding: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.surface, borderRadius: RADIUS.card,
+    overflow: 'hidden',
+    ...SHADOW.sm,
   },
-  checkWrap: { marginRight: 10, justifyContent: 'center', alignItems: 'center' },
+  cardDone: { opacity: 0.55 },
+
+  accentBar: { width: 4, alignSelf: 'stretch' },
+
+  checkWrap: {
+    width: 44, alignItems: 'center', justifyContent: 'center',
+  },
   checkCircle: {
-    width: 24, height: 24, borderRadius: 12,
-    borderWidth: 2, borderColor: '#ccc',
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 2, borderColor: C.border,
     justifyContent: 'center', alignItems: 'center',
     backgroundColor: '#fff',
   },
-  checkCircleDone: { borderColor: '#1D9E75', backgroundColor: '#1D9E75' },
-  checkMark: { fontSize: 13, color: '#fff', fontWeight: '700', lineHeight: 16 },
-  priorityBar: { width: 3, height: 36, borderRadius: 2, marginRight: 10 },
-  icon: { fontSize: 20, marginRight: 12 },
-  content: { flex: 1 },
-  title: { fontSize: 15, fontWeight: '600', color: '#222' },
-  titleDone: { color: '#aaa', textDecorationLine: 'line-through' },
-  context: { fontSize: 12, color: '#999', marginTop: 2 },
-  time: { fontSize: 12, color: '#7F77DD', marginTop: 3, fontWeight: '500' },
-  snoozeRow: {
-    flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 10,
-    marginTop: 4, overflow: 'hidden',
+  checkMark: { fontSize: 11, color: '#fff', fontWeight: '800', lineHeight: 14 },
+
+  content: { flex: 1, paddingVertical: SP.md, paddingRight: SP.md },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SP.xs },
+  title: {
+    flex: 1, fontSize: 14, fontWeight: '600', color: C.text,
+    letterSpacing: -0.1, lineHeight: 20,
   },
-  snoozeBtn: { flex: 1, padding: 10, alignItems: 'center' },
-  snoozeBtnText: { fontSize: 13, color: '#7F77DD', fontWeight: '600' },
-  snoozeCancel: { padding: 10, paddingHorizontal: 14 },
-  snoozeCancelText: { fontSize: 13, color: '#999' },
+  titleDone: { color: C.text4, textDecorationLine: 'line-through' },
+  chevron: { fontSize: 18, color: C.text4, marginTop: -1 },
+
+  aiRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  aiDot: { fontSize: 9 },
+  aiText: { fontSize: 12, color: C.text3, flex: 1 },
+
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SP.xs, marginTop: SP.sm },
+  chip: {
+    paddingHorizontal: SP.sm, paddingVertical: 3,
+    borderRadius: RADIUS.pill,
+  },
+  chipText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.1 },
+
+  snoozeRow: {
+    flexDirection: 'row', backgroundColor: C.surface2,
+    borderRadius: RADIUS.md, marginTop: 4, overflow: 'hidden',
+    borderWidth: 1, borderColor: C.border,
+  },
+  snoozeBtn: { flex: 1, padding: SP.md, alignItems: 'center' },
+  snoozeBtnText: { fontSize: 13, color: C.violet, fontWeight: '600' },
+  snoozeCancel: { padding: SP.md, paddingHorizontal: SP.lg },
+  snoozeCancelText: { fontSize: 13, color: C.text3 },
 });

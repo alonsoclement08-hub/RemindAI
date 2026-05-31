@@ -122,6 +122,86 @@ Génère des conseils TRÈS PERSONNALISÉS. Retourne UNIQUEMENT ce JSON valide:
 
 Sois CONCRET et SPÉCIFIQUE. Pas de conseils génériques.`;
 
+const GENERATE_ADVICE_PROMPT = (context) => {
+  const { type, patterns, recentReminders, weekStats, preferences, budget, priceData } = context;
+
+  const parts = [];
+
+  if (patterns) {
+    parts.push(`Patterns: jour préféré = ${patterns.favoriteDay?.[0] || 'inconnu'}, moment = ${patterns.favoriteTime?.[0] || 'inconnu'}, taux complétion = ${patterns.completionRate}%`);
+    if (patterns.topCategories?.length > 0) {
+      parts.push(`Catégories fréquentes: ${patterns.topCategories.map((c) => c.category).join(', ')}`);
+    }
+  }
+
+  if (weekStats) {
+    const prev = weekStats.prevWeek || 0;
+    const curr = weekStats.completed || 0;
+    const diff = prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null;
+    parts.push(`Semaine en cours: ${curr} rappels complétés${diff !== null ? ` (${diff > 0 ? '+' : ''}${diff}% vs semaine dernière)` : ''}`);
+  }
+
+  if (recentReminders?.length > 0) {
+    const pending = recentReminders.filter((r) => !r.completedAt).slice(0, 3);
+    const urgents = pending.filter((r) => r.priority >= 3);
+    if (urgents.length > 0) parts.push(`Urgents: ${urgents.map((r) => r.title).join(', ')}`);
+    else if (pending.length > 0) parts.push(`En attente: ${pending.map((r) => r.title).slice(0, 3).join(', ')}`);
+  }
+
+  if (preferences?.length > 0) {
+    const top = preferences[0];
+    if (top.score > 0.5) parts.push(`Catégorie préférée: ${top.category} (${Math.round(top.score * 100)}%)`);
+    const disliked = preferences.find((p) => p.score < 0.2 && p.timesIgnored > 2);
+    if (disliked) parts.push(`Catégorie évitée: ${disliked.category}`);
+  }
+
+  if (budget) {
+    const pct = Math.round((budget.spent / budget.limit) * 100);
+    parts.push(`Budget courses: ${budget.spent}€/${budget.limit}€ (${pct}% utilisé)`);
+  }
+
+  if (priceData?.length > 0) {
+    const best = priceData[0];
+    parts.push(`Prix repéré: ${best.product} à ${best.price}€ chez ${best.store} (économie de ${best.savings}€)`);
+  }
+
+  const typeInstructions = {
+    daily_summary:     'Génère un résumé de la journée. Mentionne ce qui est urgent ou ce qui mérite attention. Encourage.',
+    motivation:        'Génère un message ultra-motivant sur la progression cette semaine. Compare à la semaine précédente si possible.',
+    budget_alert:      'Génère une alerte budget bienveillante. Sois factuel (montant exact) et donne un conseil concret.',
+    routine_help:      'Explique pourquoi maintenant est le bon moment pour exécuter une routine selon les patterns.',
+    price_advice:      'Parle du meilleur prix trouvé : économie réalisable, distance, moment idéal selon les habitudes.',
+    pattern_insight:   'Partage un insight sur les habitudes de l\'utilisateur. Sois précis et encourageant.',
+    weather_based:     'Donne un conseil adapté à la saison et au contexte (intérieur/extérieur).',
+    reminder_specific: 'Donne un conseil TRÈS SPÉCIFIQUE à ce rappel précis. Explique POURQUOI maintenant est le bon moment. Cite les vrais chiffres (X fois complété, dernière fois quand, taux de completion pour cette catégorie). Si l\'utilisateur a repoussé plusieurs fois, dis-le franchement mais avec bienveillance.',
+  };
+
+  // reminder_specific: use pre-built context string from the route
+  const contextBlock = context._contextOverride || parts.join('\n') || 'Pas encore de données utilisateur.';
+
+  return `Tu es RemindAI, un assistant personnel intelligent et bienveillant. Réponds TOUJOURS en français.
+
+STYLE OBLIGATOIRE:
+- Conversationnel et naturel, comme un ami bienveillant
+- Utilise "tu/toi/ta" jamais "l'utilisateur"
+- Court et actionnable: 2-4 phrases MAXIMUM
+- 1-2 emojis naturels maximum
+- PAS de listes à puces — texte fluide uniquement
+- Sois SPÉCIFIQUE: cite les vrais chiffres, noms, catégories
+
+DONNÉES DISPONIBLES:
+${contextBlock}
+
+MISSION: ${typeInstructions[type] || typeInstructions.daily_summary}
+
+Retourne UNIQUEMENT ce JSON valide (sans markdown, sans explication):
+{
+  "message": "texte conversationnel de 2-4 phrases",
+  "tone": "encouraging|advisory|urgent|motivating",
+  "actionItems": ["action courte 1", "action courte 2"]
+}`;
+};
+
 const SUGGEST_PROMPT = (context, limit) => `Suggère ${limit} rappels pertinents basés sur les habitudes de l'utilisateur.
 
 Habitudes: ${JSON.stringify(context)}
@@ -294,6 +374,23 @@ const gemmaService = {
     return result;
   },
 
+  async generateAdvice(context) {
+    const key = makeCacheKey("gen_advice", JSON.stringify(context).slice(0, 300));
+    const cached = await cacheGet(key);
+    if (cached) return { ...cached, cached: true };
+
+    try {
+      const raw = await callGemma(GENERATE_ADVICE_PROMPT(context));
+      const result = extractJSON(raw);
+      // short TTL — advice is time-sensitive
+      try { await redis.setex(key, 900, JSON.stringify(result)); } catch {}
+      return result;
+    } catch {
+      // Template fallback when Gemma is offline
+      return generateTemplateAdvice(context);
+    }
+  },
+
   async suggestReminders(context, limit = 3) {
     const key = makeCacheKey("suggest", JSON.stringify(context));
     const cached = await cacheGet(key);
@@ -307,6 +404,67 @@ const gemmaService = {
     return suggestions;
   },
 };
+
+function generateTemplateAdvice(context) {
+  const { type, patterns, weekStats, recentReminders, budget } = context;
+  const h = new Date().getHours();
+  const greeting = h < 12 ? 'Bonjour' : h < 18 ? 'Salut' : 'Bonsoir';
+
+  const pending = (recentReminders || []).filter((r) => !r.completedAt);
+  const urgents = pending.filter((r) => r.priority >= 3);
+
+  if (type === 'budget_alert' && budget) {
+    const pct = Math.round((budget.spent / budget.limit) * 100);
+    return {
+      message: `⚠️ Attention ! Tes dépenses courses ont atteint ${pct}% de ton budget (${budget.spent}€/${budget.limit}€). Il te reste ${budget.limit - budget.spent}€. Pense à vérifier les promos avant de faire les courses !`,
+      tone: 'urgent',
+      actionItems: ['Voir mon budget', 'Comparer les prix'],
+    };
+  }
+
+  if (type === 'motivation' && weekStats) {
+    const curr = weekStats.completed || 0;
+    return {
+      message: `${greeting} ! Tu as complété ${curr} rappel${curr > 1 ? 's' : ''} cette semaine — c'est top ! 🎯 Continue sur cette lancée, chaque rappel complété te rapproche de tes objectifs.`,
+      tone: 'motivating',
+      actionItems: ['Voir mes stats', 'Créer un rappel'],
+    };
+  }
+
+  if (type === 'pattern_insight' && patterns) {
+    const day = patterns.favoriteDay?.[0];
+    const time = patterns.favoriteTime?.[0];
+    return {
+      message: `J'ai analysé tes habitudes 🧠 Tu es particulièrement productif${day ? ` le ${day}` : ''}${time ? ` en ${time}` : ''}. Je m'en souviens pour te suggérer les rappels au meilleur moment !`,
+      tone: 'encouraging',
+      actionItems: ['Voir mes préférences'],
+    };
+  }
+
+  // Default: daily_summary
+  if (urgents.length > 0) {
+    return {
+      message: `${greeting} ! Tu as ${urgents.length} tâche${urgents.length > 1 ? 's' : ''} urgente${urgents.length > 1 ? 's' : ''} aujourd'hui. Commence par "${urgents[0].title}" — ça te donnera de l'élan pour la suite 💪`,
+      tone: 'advisory',
+      actionItems: [`Voir ${urgents[0].title}`, 'Voir tous les urgents'],
+    };
+  }
+
+  if (pending.length === 0) {
+    return {
+      message: `${greeting} ! Tout est à jour — bravo 🎉 Profite de cette journée, tu l'as mérité !`,
+      tone: 'encouraging',
+      actionItems: ['Créer un rappel'],
+    };
+  }
+
+  const rate = patterns?.completionRate;
+  return {
+    message: `${greeting} ! Tu as ${pending.length} rappel${pending.length > 1 ? 's' : ''} en attente${rate ? ` et un taux de complétion de ${rate}%` : ''}. Avance à ton rythme — tu gères ! 🚀`,
+    tone: 'encouraging',
+    actionItems: ['Voir mes rappels'],
+  };
+}
 
 module.exports = gemmaService;
 module.exports.callGemma = callGemma;

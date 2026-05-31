@@ -57,4 +57,24 @@ export const initSchema = `
   CREATE INDEX IF NOT EXISTS idx_queue_status ON sync_queue(status);
   CREATE INDEX IF NOT EXISTS idx_queue_priority ON sync_queue(priority, created_at);
   CREATE INDEX IF NOT EXISTS idx_notif_reminder ON notification_history(reminder_id);
+
+  CREATE TABLE IF NOT EXISTS routines (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS routine_steps (
+    id TEXT PRIMARY KEY,
+    routine_id TEXT NOT NULL,
+    step_order INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT DEFAULT 'personal',
+    priority INTEGER DEFAULT 2,
+    delay_minutes INTEGER DEFAULT 0,
+    condition TEXT DEFAULT 'always',
+    FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE
+  );
 `;

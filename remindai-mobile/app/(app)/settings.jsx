@@ -1,9 +1,11 @@
 import { View, Text, Pressable, StyleSheet, Alert, Switch } from 'react-native';
 import { useState } from 'react';
+import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../src/store/auth.store';
 
 export default function SettingsScreen() {
   const { user, logout } = useAuthStore();
+  const router = useRouter();
   const [quietHours, setQuietHours] = useState(false);
   const [dailySummary, setDailySummary] = useState(true);
 
@@ -43,6 +45,22 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Intelligence Artificielle</Text>
+        <Pressable style={styles.row} onPress={() => router.push('/(app)/preferences')}>
+          <Text style={styles.label}>🧠 Préférences apprises</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Intégrations</Text>
+        <Pressable style={styles.row} onPress={() => router.push('/(app)/integrations')}>
+          <Text style={styles.label}>Calendriers et applications</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Plan</Text>
         {user?.tier !== 'pro' && (
           <Pressable style={styles.upgradeBtn}>
@@ -72,4 +90,5 @@ const styles = StyleSheet.create({
   upgradeBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   logoutBtn: { margin: 20, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E0654A', alignItems: 'center' },
   logoutText: { color: '#E0654A', fontWeight: '600', fontSize: 15 },
+  chevron: { fontSize: 20, color: '#bbb', fontWeight: '300' },
 });

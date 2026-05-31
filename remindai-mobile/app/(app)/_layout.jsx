@@ -9,7 +9,7 @@ export default function AppLayout() {
 
   useEffect(() => {
     if (!isLoading && !isSignedIn) {
-      router.replace('/(auth)/login');
+      router.replace('/(auth)/welcome');
     }
   }, [isSignedIn, isLoading]);
 
@@ -50,6 +50,19 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
+        name="analytics"
+        options={{
+          title: 'Stats',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="analytics-outline" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="routines"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: 'Réglages',
@@ -57,6 +70,14 @@ export default function AppLayout() {
             <Ionicons name="settings-outline" color={color} size={size} />
           ),
         }}
+      />
+      <Tabs.Screen
+        name="integrations"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="preferences"
+        options={{ href: null }}
       />
     </Tabs>
   );

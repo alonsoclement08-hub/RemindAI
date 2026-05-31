@@ -28,6 +28,7 @@ export default function AIChat({
   onConfirm,
   onFollowUp,
   onQCMAnswers,
+  qcmAnswered = false,
   saving,
   loadingRecommendations,
   recommendations,
@@ -60,7 +61,7 @@ export default function AIChat({
   const canConfirm = response?.reminder?.scheduledAt || selectedHour !== null;
 
   // ── QCM MODE ──────────────────────────────────────────────────────────────
-  if (hasQCM && !hasRecommendations && !loadingRecommendations) {
+  if (hasQCM && !qcmAnswered && !hasRecommendations && !loadingRecommendations) {
     return (
       <View style={styles.container}>
         <View style={styles.userRow}>
@@ -266,7 +267,7 @@ export default function AIChat({
         </Pressable>
       </View>
 
-      {!missingInfo && (
+      {(!missingInfo || qcmAnswered) && (
         <Pressable
           style={[styles.confirmBtn, saving && styles.btnDisabled]}
           onPress={() => onConfirm(response.reminder)}

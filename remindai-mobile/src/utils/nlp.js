@@ -28,17 +28,36 @@ function detectPriority(text) {
 }
 
 function parseTime(text) {
-  // FR "à 14h30" or "à 14:30" — h or colon separator with minutes
-  const frFull = text.match(/à\s*(\d{1,2})[h:](\d{2})/i);
-  if (frFull) {
-    return { hour: parseInt(frFull[1], 10), minute: parseInt(frFull[2], 10) };
+  const lower = text.toLowerCase();
+
+  // Named time shortcuts — checked first
+  if (/\bmidi\b/.test(lower)) return { hour: 12, minute: 0 };
+  if (/\bminuit\b/.test(lower)) return { hour: 0, minute: 0 };
+  if (/\bce soir\b|\bsoir\b/.test(lower) && !/\d+h/.test(lower)) return { hour: 18, minute: 0 };
+  if (/\bmatin\b/.test(lower) && !/\d+h/.test(lower)) return { hour: 9, minute: 0 };
+  if (/\baprès-midi\b|\baprèsmidi\b/.test(lower) && !/\d+h/.test(lower)) return { hour: 14, minute: 0 };
+
+  // FR "à 14h30" or "à 14:30" — with "à" prefix
+  const frFullAccent = text.match(/à\s*(\d{1,2})[h:](\d{2})/i);
+  if (frFullAccent) {
+    return { hour: parseInt(frFullAccent[1], 10), minute: parseInt(frFullAccent[2], 10) };
   }
-  // FR "à 14h" — hour only, no minutes
-  const frHour = text.match(/à\s*(\d{1,2})h\b/i);
-  if (frHour) {
-    return { hour: parseInt(frHour[1], 10), minute: 0 };
+  // FR "à 14h" — with "à" prefix, hour only
+  const frHourAccent = text.match(/à\s*(\d{1,2})h\b/i);
+  if (frHourAccent) {
+    return { hour: parseInt(frHourAccent[1], 10), minute: 0 };
   }
-  // EN "at 3pm", "at 10:30am" — must have am/pm to avoid false positives
+  // FR "14h30" or "14:30" — without "à"
+  const frFullBare = text.match(/(?:^|[\s,])(\d{1,2})[h:](\d{2})(?:\b|$)/i);
+  if (frFullBare) {
+    return { hour: parseInt(frFullBare[1], 10), minute: parseInt(frFullBare[2], 10) };
+  }
+  // FR "14h" — without "à", hour only
+  const frHourBare = text.match(/(?:^|[\s,])(\d{1,2})h(?:\b|$)/i);
+  if (frHourBare) {
+    return { hour: parseInt(frHourBare[1], 10), minute: 0 };
+  }
+  // EN "at 3pm", "at 10:30am"
   const en = text.match(/\bat\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
   if (en) {
     let hour = parseInt(en[1], 10);
@@ -65,8 +84,8 @@ function parseDate(text) {
     base = nextMonday(now);
   } else if (lower.includes('ce soir') || lower.includes('tonight')) {
     base = now;
-    // Only apply default evening hour when no explicit time was given
-    if (time.hour === 9 && time.minute === 0) time.hour = 20;
+    // Only apply evening default if no explicit numeric time was given
+    if (!lower.match(/\d{1,2}h/) && !lower.match(/\bat\s*\d/) && time.hour === 18) time.hour = 20;
   } else {
     for (const [dayName, dayNum] of Object.entries(DAYS_FR)) {
       if (lower.includes(dayName)) {
@@ -82,7 +101,9 @@ function parseDate(text) {
 function extractTitle(text) {
   return text
     .replace(/demain|tomorrow|après-demain|ce soir|tonight|semaine prochaine|next week/gi, '')
+    .replace(/\bmidi\b|\bminuit\b|\bsoir\b|\bmatin\b|\baprès-midi\b/gi, '')
     .replace(/à\s*\d{1,2}[h:]\d*|at\s*\d{1,2}(:\d{2})?\s*(am|pm)?/gi, '')
+    .replace(/(?:^|[\s,])\d{1,2}h\d{0,2}(?:\b|$)/gi, '')
     .replace(/lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche/gi, '')
     .replace(/urgent|important|asap/gi, '')
     .replace(/rappelle-moi (de |d')?/gi, '')

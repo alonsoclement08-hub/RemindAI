@@ -24,6 +24,10 @@ app.use("/api/location", apiLimiter, require("./routes/location"));
 app.use("/api/products", apiLimiter, require("./routes/products"));
 app.use("/api/budget", apiLimiter, require("./routes/budget"));
 app.use("/api/ai", apiLimiter, require("./routes/ai"));
+app.use("/api/sync", apiLimiter, require("./routes/sync"));
+app.use("/api/integrations", apiLimiter, require("./routes/integrations"));
+app.use("/api/analytics", apiLimiter, require("./routes/analytics"));
+app.use("/api/weather",   apiLimiter, require("./routes/weather"));
 
 app.use(errorHandler);
 

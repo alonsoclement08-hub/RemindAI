@@ -6,11 +6,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { analyticsAPI } from '../../src/api/analytics';
+import { aiAPI } from '../../src/api/ai';
 import KPICard from '../../src/components/analytics/KPICard';
 import CompletionChart from '../../src/components/analytics/CompletionChart';
 import HourlyChart from '../../src/components/analytics/HourlyChart';
 import CategoryBreakdown from '../../src/components/analytics/CategoryBreakdown';
 import InsightsCard from '../../src/components/analytics/InsightsCard';
+import RemHabitsCard from '../../src/components/analytics/RemHabitsCard';
 
 const PURPLE = '#7F77DD';
 const PERIODS = [
@@ -42,6 +44,8 @@ export default function AnalyticsScreen() {
   const [summary, setSummary] = useState(null);
   const [charts, setCharts] = useState(null);
   const [insights, setInsights] = useState([]);
+  const [habits, setHabits] = useState(null);
+  const [habitsLoading, setHabitsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const insets = useSafeAreaInsets();
@@ -65,6 +69,14 @@ export default function AnalyticsScreen() {
   }, [period]);
 
   useEffect(() => { load(period); }, [period]);
+
+  useEffect(() => {
+    setHabitsLoading(true);
+    aiAPI.getHabits()
+      .then((h) => setHabits(h))
+      .catch(() => {})
+      .finally(() => setHabitsLoading(false));
+  }, []);
 
   const handleExport = async () => {
     setExporting(true);
@@ -207,6 +219,13 @@ export default function AnalyticsScreen() {
           {insights.length > 0 && (
             <Section title="🤖 Insights IA">
               <InsightsCard insights={insights} />
+            </Section>
+          )}
+
+          {/* ── Rem habit analysis ── */}
+          {(habitsLoading || habits) && (
+            <Section title="🧠 Rem analyse tes habitudes">
+              <RemHabitsCard habits={habits} loading={habitsLoading} />
             </Section>
           )}
 

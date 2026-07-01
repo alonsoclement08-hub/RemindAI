@@ -1,0 +1,78 @@
+{
+  "expo": {
+    "name": "RemindAI",
+    "slug": "remindai",
+    "version": "1.0.0",
+    "sdkVersion": "54.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "remindai",
+    "userInterfaceStyle": "automatic",
+    "description": "AI-powered proactive reminders. Speaks French and English. Works offline.",
+    "githubUrl": "https://github.com/remindai/remindai-mobile",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#7F77DD"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#7F77DD",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "RemindAI utilise ta position pour les rappels géolocalisés."
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.remindai.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Used for voice-to-reminder feature",
+        "NSSpeechRecognitionUsageDescription": "Used to transcribe voice reminders",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.50021346524-0bflvhv1o9gfglpddbre7hmbjaqnurn5"
+            ]
+          }
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#7F77DD"
+      },
+      "package": "com.remindai.app",
+      "versionCode": 1,
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "your-eas-project-id"
+      }
+    }
+  }
+}

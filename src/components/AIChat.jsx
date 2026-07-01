@@ -84,7 +84,7 @@ export default function AIChat({
           </View>
         </View>
         <View style={styles.aiBubbleWrap}>
-          <View style={styles.aiAvatar}><Text style={styles.aiAvatarText}>IA</Text></View>
+          <View style={styles.aiAvatar}><Text style={styles.aiAvatarText}>Rem</Text></View>
           <View style={styles.aiBubble}>
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color="#7F77DD" />
@@ -107,7 +107,7 @@ export default function AIChat({
           </View>
         </View>
         <View style={styles.aiBubbleWrap}>
-          <View style={styles.aiAvatar}><Text style={styles.aiAvatarText}>IA</Text></View>
+          <View style={styles.aiAvatar}><Text style={styles.aiAvatarText}>Rem</Text></View>
           <View style={styles.aiBubble}>
             {reco.intro && <Text style={styles.adviceText}>{reco.intro}</Text>}
 
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     width: 32, height: 32, borderRadius: 16, backgroundColor: '#1D9E75',
     alignItems: 'center', justifyContent: 'center', marginRight: 10, marginTop: 2,
   },
-  aiAvatarText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  aiAvatarText: { color: '#fff', fontSize: 9, fontWeight: '700' },
   aiBubble: {
     flex: 1, backgroundColor: '#f4f4f8', borderRadius: 16, borderTopLeftRadius: 4,
     padding: 14,

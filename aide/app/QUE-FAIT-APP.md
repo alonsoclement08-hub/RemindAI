@@ -24,8 +24,8 @@ L'onglet IA propose deux modes, sélectionnables avec un toggle :
 - Tu confirmes et le rappel est créé
 
 **Mode "Poser une question"**
-- Chat conversationnel : pose n'importe quelle question à Rémi (l'IA)
-- Rémi connaît ton agenda et tes rappels
+- Chat conversationnel : pose n'importe quelle question à Rem (l'IA)
+- Rem connaît ton agenda et tes rappels
 - Exemples : *"Qu'est-ce que j'ai prévu aujourd'hui ?"*, *"Des conseils pour mieux m'organiser ?"*
 
 ### Résumé quotidien

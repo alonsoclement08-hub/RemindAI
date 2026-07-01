@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 import { useRemindersStore } from '../../src/store/reminders.store';
 import { aiAPI } from '../../src/api/ai';
 import { findConflict } from '../../src/utils/conflicts';
@@ -52,6 +54,9 @@ export default function CreateScreen() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const recordingRef = useRef(null);
   const scrollRef = useRef(null);
 
   useFocusEffect(useCallback(() => {
@@ -60,6 +65,46 @@ export default function CreateScreen() {
     setInput('');
     setMode('create');
   }, []));
+
+  const startRecording = async () => {
+    try {
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        Alert.alert('Micro', 'Autorise RemindAI à utiliser le micro dans les réglages.');
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording: rec } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      recordingRef.current = rec;
+      setRecording(true);
+    } catch {
+      Alert.alert('Erreur', 'Impossible de démarrer l\'enregistrement.');
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recordingRef.current) return;
+    setRecording(false);
+    setTranscribing(true);
+    try {
+      await recordingRef.current.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = recordingRef.current.getURI();
+      recordingRef.current = null;
+      if (!uri) return;
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const text = await aiAPI.transcribe(base64, 'audio/m4a');
+      if (text?.trim()) {
+        setInput(text.trim());
+      }
+    } catch {
+      Alert.alert('Oups', 'Transcription impossible, réessaie.');
+    } finally {
+      setTranscribing(false);
+    }
+  };
 
   const checkLimit = () => {
     const active = reminders.filter((r) => !r.completed_at && !r.deleted_at).length;
@@ -202,7 +247,7 @@ export default function CreateScreen() {
                 <SFIcon name="sparkle.small" size={28} color="white" />
               </View>
               <Text style={styles.emptyTitle}>
-                {mode === 'create' ? 'Quel est ton rappel ?' : "Salut, c'est Rémi 👋"}
+                {mode === 'create' ? 'Quel est ton rappel ?' : "Salut, c'est Rem 👋"}
               </Text>
               <Text style={styles.emptySub}>
                 {mode === 'create'
@@ -253,16 +298,33 @@ export default function CreateScreen() {
             <View style={styles.compose}>
               <TextInput
                 style={styles.composeInput}
-                placeholder={mode === 'create' ? 'Rappelle-moi de…' : 'Écris à Rémi…'}
+                placeholder={mode === 'create' ? 'Rappelle-moi de…' : 'Écris à Rem…'}
                 placeholderTextColor={C.tertiaryLabel}
-                value={input}
+                value={transcribing ? '…' : input}
                 onChangeText={setInput}
                 multiline
+                editable={!transcribing && !recording}
               />
-              <Pressable style={[styles.composeBtn, styles.composeSend]} onPress={() => send()} disabled={loading || !input.trim()}>
+              {transcribing ? (
+                <View style={styles.composeBtn}>
+                  <ActivityIndicator size="small" color={C.brand} />
+                </View>
+              ) : (
+                <Pressable
+                  style={[styles.composeBtn, recording ? styles.composeMicActive : styles.composeMic]}
+                  onPressIn={startRecording}
+                  onPressOut={stopRecording}
+                >
+                  <SFIcon name={recording ? 'stop.circle.fill' : 'mic.fill'} size={18} color="white" weight="medium" />
+                </Pressable>
+              )}
+              <Pressable style={[styles.composeBtn, styles.composeSend]} onPress={() => send()} disabled={loading || !input.trim() || transcribing}>
                 <SFIcon name="arrow.up" size={18} color="white" weight="medium" />
               </Pressable>
             </View>
+            {recording && (
+              <Text style={styles.recordingHint}>🔴 Parle… relâche pour transcrire</Text>
+            )}
           </View>
         )}
       </KeyboardAvoidingView>
@@ -305,8 +367,11 @@ const styles = StyleSheet.create({
   loadingRow: { alignItems: 'center', paddingVertical: 12 },
 
   foot: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 },
-  compose: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, backgroundColor: 'white', borderWidth: 1.5, borderColor: 'rgba(127,119,221,0.22)', borderRadius: 24, paddingLeft: 18, paddingRight: 7, paddingVertical: 7 },
+  compose: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, backgroundColor: 'white', borderWidth: 1.5, borderColor: 'rgba(127,119,221,0.22)', borderRadius: 24, paddingLeft: 18, paddingRight: 7, paddingVertical: 7 },
   composeInput: { flex: 1, fontSize: 17, fontWeight: '500', color: '#2A2440', letterSpacing: -0.3, maxHeight: 120, paddingVertical: 8 },
   composeBtn: { width: 38, height: 38, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  composeMic: { backgroundColor: 'rgba(127,119,221,0.15)' },
+  composeMicActive: { backgroundColor: '#E0654A' },
   composeSend: { backgroundColor: C.brand },
+  recordingHint: { textAlign: 'center', fontSize: 12, color: '#E0654A', marginTop: 6, fontWeight: '600' },
 });

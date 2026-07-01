@@ -58,6 +58,29 @@ export const aiAPI = {
     return data;
   },
 
+  async getDailyPlan() {
+    try {
+      const { data } = await client.get('/ai/daily-plan');
+      return data;
+    } catch {
+      return null;
+    }
+  },
+
+  async transcribe(base64Audio, mimeType = 'audio/m4a') {
+    const { data } = await client.post('/ai/transcribe', { audio: base64Audio, mimeType });
+    return data.text || '';
+  },
+
+  async getHabits() {
+    try {
+      const { data } = await client.get('/ai/habits');
+      return data;
+    } catch {
+      return null;
+    }
+  },
+
   async generateAdvice({ type = 'daily_summary', extraContext = {} } = {}) {
     try {
       const { data } = await client.post('/ai/generate-advice', { type, extraContext });

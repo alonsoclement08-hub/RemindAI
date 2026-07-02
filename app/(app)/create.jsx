@@ -59,11 +59,27 @@ export default function CreateScreen() {
   const recordingRef = useRef(null);
   const scrollRef = useRef(null);
 
+  const [dailyPlan, setDailyPlan] = useState(null);
+  const [planLoading, setPlanLoading] = useState(false);
+
+  const loadDailyPlan = useCallback(async () => {
+    setPlanLoading(true);
+    try {
+      const plan = await aiAPI.getDailyPlan();
+      setDailyPlan(plan);
+    } catch {
+      setDailyPlan(null);
+    } finally {
+      setPlanLoading(false);
+    }
+  }, []);
+
   useFocusEffect(useCallback(() => {
     setCreateTurns([]);
     setAskMessages([]);
     setInput('');
     setMode('create');
+    loadDailyPlan();
   }, []));
 
   const startRecording = async () => {
@@ -261,6 +277,46 @@ export default function CreateScreen() {
                   </Pressable>
                 ))}
               </View>
+
+              {/* Plan du jour — visible dans le mode "Poser une question" */}
+              {mode === 'ask' && (
+                <View style={styles.plan}>
+                  <View style={styles.planHeader}>
+                    <SFIcon name="sparkles" size={14} color="#7F77DD" />
+                    <Text style={styles.planHeaderText}>Mon plan du jour</Text>
+                    <Pressable onPress={loadDailyPlan} hitSlop={8}>
+                      <SFIcon name="arrow.clockwise" size={13} color="#aaa" />
+                    </Pressable>
+                  </View>
+                  {planLoading ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+                      <ActivityIndicator size="small" color="#7F77DD" />
+                      <Text style={styles.planLoadingText}>Rem prépare ta journée…</Text>
+                    </View>
+                  ) : dailyPlan ? (
+                    <>
+                      {dailyPlan.greeting ? (
+                        <Text style={styles.planGreeting}>{dailyPlan.greeting}</Text>
+                      ) : null}
+                      {(dailyPlan.plan || []).map((item, i) => (
+                        <View key={i} style={styles.planItem}>
+                          <View style={styles.planTime}>
+                            <Text style={styles.planTimeText}>{item.time}</Text>
+                            <Text style={styles.planDur}>{item.durationMin}min</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.planItemTitle}>{item.title}</Text>
+                            {item.tip ? <Text style={styles.planItemTip}>{item.tip}</Text> : null}
+                          </View>
+                        </View>
+                      ))}
+                      {dailyPlan.closingTip ? (
+                        <Text style={styles.planClosing}>{dailyPlan.closingTip}</Text>
+                      ) : null}
+                    </>
+                  ) : null}
+                </View>
+              )}
             </View>
           ) : mode === 'create' ? (
             createTurns.map((t) => (
@@ -374,4 +430,23 @@ const styles = StyleSheet.create({
   composeMicActive: { backgroundColor: '#E0654A' },
   composeSend: { backgroundColor: C.brand },
   recordingHint: { textAlign: 'center', fontSize: 12, color: '#E0654A', marginTop: 6, fontWeight: '600' },
+
+  plan: {
+    width: '100%', marginTop: 20,
+    backgroundColor: 'rgba(127,119,221,0.06)',
+    borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: 'rgba(127,119,221,0.15)',
+    gap: 10,
+  },
+  planHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  planHeaderText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#7F77DD', letterSpacing: 0.2 },
+  planLoadingText: { fontSize: 12, color: '#aaa', marginTop: 6 },
+  planGreeting: { fontSize: 13, color: '#555', lineHeight: 19, fontStyle: 'italic', marginBottom: 4 },
+  planItem: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  planTime: { minWidth: 44, alignItems: 'center' },
+  planTimeText: { fontSize: 12, fontWeight: '700', color: '#7F77DD' },
+  planDur: { fontSize: 10, color: '#bbb' },
+  planItemTitle: { fontSize: 14, fontWeight: '600', color: '#2A2440', letterSpacing: -0.2 },
+  planItemTip: { fontSize: 12, color: '#888', fontStyle: 'italic', marginTop: 2, lineHeight: 17 },
+  planClosing: { fontSize: 12, color: '#1D9E75', fontStyle: 'italic', marginTop: 4, lineHeight: 18 },
 });

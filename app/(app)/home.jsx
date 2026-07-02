@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
-  RefreshControl, ActivityIndicator, Animated, Modal, TextInput,
+  RefreshControl, ActivityIndicator, Animated, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -94,10 +94,8 @@ export default function HomeScreen() {
   const deleteTimers = useRef({});
 
   const [streak, setStreak] = useState(0);
-  const [dailyPlan, setDailyPlan] = useState(null);
-  const [planLoading, setPlanLoading] = useState(false);
-  const [planVisible, setPlanVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchVisible, setSearchVisible] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
   const scrollRef = useRef(null);
 
@@ -132,22 +130,6 @@ export default function HomeScreen() {
   const userName = user?.name || 'toi';
 
   const openDetail = (r) => router.push({ pathname: '/(app)/detail', params: { id: r.id } });
-
-  const loadDailyPlan = async () => {
-    if (dailyPlan) { setPlanVisible(true); return; }
-    setPlanLoading(true);
-    setPlanVisible(true);
-    try {
-      const plan = await aiAPI.getDailyPlan();
-      setDailyPlan(plan);
-    } catch {
-      setDailyPlan({ greeting: "Impossible de générer le plan, vérifie ta connexion.", plan: [], closingTip: "" });
-    } finally {
-      setPlanLoading(false);
-    }
-  };
-
-  const CAT_LABELS = { work: 'Travail', health: 'Santé', errand: 'Courses', habit: 'Habitudes', personal: 'Personnel', call: 'Appels' };
 
   const completeAndRemove = useCallback((r) => {
     if (!r.completed_at) {
@@ -193,22 +175,35 @@ export default function HomeScreen() {
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 24 }}
-        contentOffset={{ x: 0, y: 52 }}
-        refreshControl={<RefreshControl refreshing={store.isLoading} onRefresh={store.sync} tintColor={C.brand} />}
-      >
-        {/* Barre de recherche cachée — tire l'écran vers le bas pour l'afficher */}
-        <View style={styles.searchWrap}>
-          <SFIcon name="magnifyingglass" size={15} color={C.secondaryLabel} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Rechercher un rappel…"
-            placeholderTextColor={C.tertiaryLabel}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            clearButtonMode="while-editing"
-            returnKeyType="search"
+        refreshControl={
+          <RefreshControl
+            refreshing={store.isLoading}
+            onRefresh={() => { setSearchVisible(true); store.sync(); }}
+            tintColor={C.brand}
           />
-        </View>
+        }
+      >
+        {/* Barre de recherche — apparaît au pull-to-refresh */}
+        {searchVisible && (
+          <View style={styles.searchWrap}>
+            <SFIcon name="magnifyingglass" size={15} color={C.secondaryLabel} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Rechercher un rappel…"
+              placeholderTextColor={C.tertiaryLabel}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+              autoFocus
+            />
+            <Pressable
+              hitSlop={8}
+              onPress={() => { setSearchVisible(false); setSearchQuery(''); }}
+            >
+              <SFIcon name="xmark.circle.fill" size={17} color={C.tertiaryLabel} />
+            </Pressable>
+          </View>
+        )}
 
         <Text style={styles.subTitle}>{dateStr} · Bonjour {userName}</Text>
         <Text style={styles.largeTitle}>Aujourd'hui</Text>
@@ -259,66 +254,6 @@ export default function HomeScreen() {
             <Text style={styles.streakBadge}>×{streak}</Text>
           </View>
         )}
-
-        {/* Plan de journée */}
-        <Pressable style={styles.planBtn} onPress={loadDailyPlan}>
-          <View style={styles.planBtnLeft}>
-            <SFIcon name="sparkles" size={18} color="#7F77DD" />
-            <Text style={styles.planBtnText}>Mon plan du jour avec Rem</Text>
-          </View>
-          {planLoading
-            ? <ActivityIndicator size="small" color="#7F77DD" />
-            : <SFIcon name="chevron.right.small" size={14} color="#7F77DD" />}
-        </Pressable>
-
-        {/* Modal plan de journée */}
-        <Modal visible={planVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPlanVisible(false)}>
-          <SafeAreaView style={styles.planModal}>
-            <View style={styles.planModalNav}>
-              <Text style={styles.planModalTitle}>Plan du jour · Rem</Text>
-              <Pressable onPress={() => setPlanVisible(false)} hitSlop={10}>
-                <SFIcon name="xmark.circle.fill" size={24} color="#ccc" />
-              </Pressable>
-            </View>
-            <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }} showsVerticalScrollIndicator={false}>
-              {planLoading ? (
-                <View style={{ alignItems: 'center', paddingTop: 60, gap: 12 }}>
-                  <ActivityIndicator size="large" color="#7F77DD" />
-                  <Text style={{ color: '#888', fontSize: 14 }}>Rem analyse ta journée…</Text>
-                </View>
-              ) : dailyPlan ? (
-                <>
-                  <View style={styles.planGreeting}>
-                    <Text style={styles.planGreetingEmoji}>👋</Text>
-                    <Text style={styles.planGreetingText}>{dailyPlan.greeting}</Text>
-                  </View>
-                  {(dailyPlan.plan || []).map((item, i) => (
-                    <View key={i} style={styles.planItem}>
-                      <View style={styles.planItemTime}>
-                        <Text style={styles.planItemTimeText}>{item.time}</Text>
-                        <Text style={styles.planItemDur}>{item.durationMin}min</Text>
-                      </View>
-                      <View style={styles.planItemBody}>
-                        <Text style={styles.planItemTitle}>{item.title}</Text>
-                        <Text style={styles.planItemCat}>{CAT_LABELS[item.category] || item.category}</Text>
-                        <Text style={styles.planItemTip}>{item.tip}</Text>
-                      </View>
-                    </View>
-                  ))}
-                  {dailyPlan.closingTip ? (
-                    <View style={styles.planClosing}>
-                      <Text style={styles.planClosingText}>{dailyPlan.closingTip}</Text>
-                    </View>
-                  ) : null}
-                  <Pressable style={styles.planRefreshBtn} onPress={() => { setDailyPlan(null); loadDailyPlan(); }}>
-                    <SFIcon name="arrow.clockwise" size={14} color="#7F77DD" />
-                    <Text style={styles.planRefreshText}>Régénérer le plan</Text>
-                  </Pressable>
-                </>
-              ) : null}
-            </ScrollView>
-          </SafeAreaView>
-        </Modal>
 
         {/* Suggestion proactive de Rem */}
         {suggestion && !searchQuery && (
@@ -659,54 +594,5 @@ const makeStyles = (C) => StyleSheet.create({
   streakSub: { fontSize: 13, color: '#8A4A00', lineHeight: 18 },
   streakBadge: { fontSize: 22, fontWeight: '900', color: '#FF8C00' },
 
-  planBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: 16, marginBottom: 16, padding: 14,
-    backgroundColor: 'rgba(127,119,221,0.07)', borderRadius: 14,
-    borderWidth: 1, borderColor: 'rgba(127,119,221,0.18)',
-  },
-  planBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  planBtnText: { fontSize: 15, fontWeight: '600', color: '#4A4376' },
 
-  planModal: { flex: 1, backgroundColor: '#f8f8fc' },
-  planModalNav: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 16,
-    borderBottomWidth: 0.5, borderBottomColor: '#e5e5ea',
-  },
-  planModalTitle: { fontSize: 17, fontWeight: '700', color: '#1a1a2e' },
-
-  planGreeting: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-    backgroundColor: '#fff', borderRadius: 14, padding: 16,
-    borderLeftWidth: 3, borderLeftColor: '#7F77DD',
-  },
-  planGreetingEmoji: { fontSize: 22 },
-  planGreetingText: { flex: 1, fontSize: 15, color: '#333', lineHeight: 22 },
-
-  planItem: {
-    flexDirection: 'row', gap: 14,
-    backgroundColor: '#fff', borderRadius: 14, padding: 14,
-    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1,
-  },
-  planItemTime: { alignItems: 'center', minWidth: 46 },
-  planItemTimeText: { fontSize: 13, fontWeight: '700', color: '#7F77DD' },
-  planItemDur: { fontSize: 11, color: '#bbb', marginTop: 2 },
-  planItemBody: { flex: 1 },
-  planItemTitle: { fontSize: 15, fontWeight: '600', color: '#1a1a2e', marginBottom: 2 },
-  planItemCat: { fontSize: 11, fontWeight: '600', color: '#7F77DD', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
-  planItemTip: { fontSize: 13, color: '#666', fontStyle: 'italic', lineHeight: 18 },
-
-  planClosing: {
-    backgroundColor: '#F0FFF7', borderRadius: 12, padding: 14,
-    borderLeftWidth: 3, borderLeftColor: '#1D9E75',
-  },
-  planClosingText: { fontSize: 14, color: '#1D9E75', lineHeight: 20 },
-
-  planRefreshBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 14, borderRadius: 12,
-    borderWidth: 1, borderColor: 'rgba(127,119,221,0.2)',
-  },
-  planRefreshText: { fontSize: 14, color: '#7F77DD', fontWeight: '600' },
 });

@@ -7,6 +7,7 @@ export default function AuthLayout() {
       <Stack.Screen name="login" />
       <Stack.Screen name="signup" />
       <Stack.Screen name="onboarding" options={{ gestureEnabled: false, animation: 'fade' }} />
+      <Stack.Screen name="rem-setup" options={{ gestureEnabled: false, animation: 'fade' }} />
     </Stack>
   );
 }

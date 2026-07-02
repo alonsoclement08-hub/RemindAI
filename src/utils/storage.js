@@ -5,6 +5,7 @@ const KEYS = {
   REFRESH_TOKEN: 'remindai_refresh_token',
   USER: 'remindai_user',
   ONBOARDING_SEEN: 'remindai_onboarding_seen',
+  REM_SETUP_SEEN: 'remindai_rem_setup_seen',
   DAILY_SUMMARY_DATE: 'remindai_daily_summary_date',
   DAILY_SUMMARY_NOTIF_ID: 'remindai_daily_summary_notif_id',
 };
@@ -38,6 +39,15 @@ export const storage = {
 
   async getOnboardingSeen() {
     const val = await SecureStore.getItemAsync(KEYS.ONBOARDING_SEEN);
+    return val === 'true';
+  },
+
+  async setRemSetupSeen() {
+    await SecureStore.setItemAsync(KEYS.REM_SETUP_SEEN, 'true');
+  },
+
+  async getRemSetupSeen() {
+    const val = await SecureStore.getItemAsync(KEYS.REM_SETUP_SEEN);
     return val === 'true';
   },
 

@@ -18,11 +18,13 @@ const CATEGORIES = [
 ];
 
 const FREQUENCIES = [
-  { value: 'once',    label: 'Une fois' },
-  { value: 'daily',   label: 'Chaque jour' },
-  { value: 'weekly',  label: 'Chaque semaine' },
-  { value: 'monthly', label: 'Chaque mois' },
-  { value: 'custom',  label: 'Personnalisée' },
+  { value: 'once',      label: 'Une fois' },
+  { value: 'daily',     label: 'Chaque jour' },
+  { value: 'every2days',label: 'Tous les 2j' },
+  { value: 'weekdays',  label: 'Jours de semaine' },
+  { value: 'weekly',    label: 'Chaque semaine' },
+  { value: 'monthly',   label: 'Chaque mois' },
+  { value: 'custom',    label: 'Personnalisée' },
 ];
 
 const WEEKDAYS = [

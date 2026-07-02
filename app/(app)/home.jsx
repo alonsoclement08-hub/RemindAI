@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
-  RefreshControl, ActivityIndicator, Animated, Modal,
+  RefreshControl, ActivityIndicator, Animated, Modal, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -97,11 +97,19 @@ export default function HomeScreen() {
   const [dailyPlan, setDailyPlan] = useState(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [planVisible, setPlanVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestion, setSuggestion] = useState(null);
+  const scrollRef = useRef(null);
 
   useFocusEffect(useCallback(() => {
     store.load();
     notificationsService.scheduleDailySummaryIfNeeded();
     analyticsAPI.getSummary('week').then((s) => { if (s?.streak) setStreak(s.streak); }).catch(() => {});
+    aiAPI.getHabits().then((h) => {
+      if (h?.patterns?.worstCategory) {
+        setSuggestion({ category: h.patterns.worstCategory, tip: h.recommendation });
+      }
+    }).catch(() => {});
   }, []));
 
   const active = store.reminders.filter((r) => !r.completed_at && !r.archived_at && !r.deleted_at);
@@ -182,10 +190,26 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 24 }}
+        contentOffset={{ x: 0, y: 52 }}
         refreshControl={<RefreshControl refreshing={store.isLoading} onRefresh={store.sync} tintColor={C.brand} />}
       >
+        {/* Barre de recherche cachée — tire l'écran vers le bas pour l'afficher */}
+        <View style={styles.searchWrap}>
+          <SFIcon name="magnifyingglass" size={15} color={C.secondaryLabel} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher un rappel…"
+            placeholderTextColor={C.tertiaryLabel}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            clearButtonMode="while-editing"
+            returnKeyType="search"
+          />
+        </View>
+
         <Text style={styles.subTitle}>{dateStr} · Bonjour {userName}</Text>
         <Text style={styles.largeTitle}>Aujourd'hui</Text>
 
@@ -296,7 +320,22 @@ export default function HomeScreen() {
           </SafeAreaView>
         </Modal>
 
-        {active.length > 0 && groupByCategory(active).map(([cat, items]) => (
+        {/* Suggestion proactive de Rem */}
+        {suggestion && !searchQuery && (
+          <Pressable style={styles.suggestionCard} onPress={() => router.push('/(app)/create')}>
+            <View style={styles.suggestionAvatar}><Text style={styles.suggestionAvatarText}>Rem</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.suggestionText}>{suggestion.tip || `Hé, tu n'as pas de rappel ${CAT_LABELS[suggestion.category] || suggestion.category} en cours — on en crée un ?`}</Text>
+            </View>
+            <SFIcon name="plus.circle.fill" size={22} color="#7F77DD" />
+          </Pressable>
+        )}
+
+        {active.length > 0 && groupByCategory(
+          searchQuery.trim()
+            ? active.filter(r => r.title.toLowerCase().includes(searchQuery.toLowerCase()))
+            : active
+        ).map(([cat, items]) => (
           <CategoryFolder
             key={cat}
             cat={cat}
@@ -308,7 +347,14 @@ export default function HomeScreen() {
           />
         ))}
 
-        {active.length === 0 && (
+        {searchQuery.trim() && active.filter(r => r.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>Aucun résultat</Text>
+            <Text style={styles.emptySub}>Aucun rappel ne correspond à « {searchQuery} »</Text>
+          </View>
+        )}
+
+        {active.length === 0 && !searchQuery && (
           <View style={styles.emptyState}>
             <View style={styles.emptyMark}>
               <SFIcon name="checkmark" size={28} color={C.brandTeal} weight="bold" />
@@ -575,6 +621,32 @@ const makeStyles = (C) => StyleSheet.create({
   },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: C.label, marginBottom: 8 },
   emptySub: { fontSize: 14, color: C.secondaryLabel, textAlign: 'center' },
+
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: 16, marginBottom: 4, marginTop: 4,
+    backgroundColor: C.surface, borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderWidth: 1, borderColor: C.separator,
+    height: 44,
+  },
+  searchInput: {
+    flex: 1, fontSize: 15, color: C.label,
+  },
+
+  suggestionCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginHorizontal: 16, marginBottom: 14, padding: 14,
+    backgroundColor: 'rgba(127,119,221,0.06)', borderRadius: 14,
+    borderWidth: 1, borderColor: 'rgba(127,119,221,0.15)',
+  },
+  suggestionAvatar: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: '#1D9E75',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  suggestionAvatarText: { color: '#fff', fontSize: 8, fontWeight: '800' },
+  suggestionText: { fontSize: 13, color: '#4A4376', lineHeight: 19, fontStyle: 'italic' },
 
   streakCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

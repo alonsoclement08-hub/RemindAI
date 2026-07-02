@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '../src/store/auth.store';
 
 export default function Index() {
-  const { isSignedIn, isLoading, onboardingSeen } = useAuthStore();
+  const { isSignedIn, isLoading, onboardingSeen, remSetupSeen } = useAuthStore();
   const router = useRouter();
 
   useEffect(() => {
@@ -13,10 +13,12 @@ export default function Index() {
       router.replace('/(auth)/welcome');
     } else if (!onboardingSeen) {
       router.replace('/(auth)/onboarding');
+    } else if (!remSetupSeen) {
+      router.replace('/(auth)/rem-setup');
     } else {
       router.replace('/(app)/home');
     }
-  }, [isLoading, isSignedIn, onboardingSeen]);
+  }, [isLoading, isSignedIn, onboardingSeen, remSetupSeen]);
 
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#7F77DD' }}>

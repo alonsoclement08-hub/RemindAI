@@ -23,6 +23,7 @@ export const useAuthStore = create((set, get) => ({
   isSignedIn: false,
   isLoading: true,
   onboardingSeen: false,
+  remSetupSeen: false,
   error: null,
 
   init: async () => {
@@ -30,11 +31,12 @@ export const useAuthStore = create((set, get) => ({
       const token = await storage.getAccessToken();
       const user = await storage.getUser();
       const onboardingSeen = await storage.getOnboardingSeen();
+      const remSetupSeen = await storage.getRemSetupSeen();
       if (token && user) {
-        set({ user, isSignedIn: true, onboardingSeen });
+        set({ user, isSignedIn: true, onboardingSeen, remSetupSeen });
         globalThis.__remindaiLogout = get().logout;
       } else {
-        set({ onboardingSeen });
+        set({ onboardingSeen, remSetupSeen });
       }
     } catch {
       set({ isSignedIn: false });
@@ -84,6 +86,11 @@ export const useAuthStore = create((set, get) => ({
   setOnboardingSeen: async () => {
     await storage.setOnboardingSeen();
     set({ onboardingSeen: true });
+  },
+
+  setRemSetupSeen: async () => {
+    await storage.setRemSetupSeen();
+    set({ remSetupSeen: true });
   },
 
   logout: async () => {
